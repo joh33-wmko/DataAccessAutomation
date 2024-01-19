@@ -1,3 +1,5 @@
+#! /usr/local/anaconda/bin/pyton
+
 # KOA Data Access Automation (DAA)
 # - run via cron on desired date for next month
 # - TBD - runs daily via cron
@@ -9,6 +11,20 @@
 # - COI_OBS           : COI/Observer Verification
 # - TDA (ToO or TWI)  : ToO/Twilight Program Verification
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
+
+# ToDo's
+# - [DONE] args PI vs PI_OBS
+# - fix too many values for Observers output
+# - sort SEMIDs for report
+# - arg to override default (next month) with this month (or any month?) for PI
+#   'jan' or '01' or '1'
+# - [DONE] output {} in f-string expressions
+# - case treatment of vtypes
+# - alias/ipac koaid is first initial + last name
+# - transfer API urls and account info to config.live.ini
+# - defs for request params and object displays?
+# - replace "set()" with None for output objects (ipac_users, etc.)
+# - logger messages
 
 # daa imports
 import argparse
@@ -59,25 +75,43 @@ sched_url = "https://vm-appserver.keck.hawaii.edu/api/schedule"
 # IPAC Access API (for GET_USERS_WITH_ACCESS and GET_SEMIDS_PER_USER)
 ipac_url = "http://vmkoatest.ipac.caltech.edu:8001/cgi-bin/PIAccess/nph-PIAccess_Auth.py"
 
+print(f'\nKOA DATA ACCESS AUTOMATION (DAA) REPORT')
+
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Verify Data Access")
 parser.add_argument("vtype")
 args = parser.parse_args()
-vtype = args.vtype              # vtype = PI, PI_OBS, COI_OBS, TDA (ToO or TWI), or KPF
-print(f'\nvtype: {vtype}\n')
+
+vtype = args.vtype
+if vtype.upper() == 'PI':
+    vtype = 'PI'
+    print(f'\nProcessing PI Verification for')
+if vtype.upper() == 'PI_OBS':
+    vtype = 'PI_OBS'
+    print(f'\nProcessing PI & Observer Verification for')
+#if vtype.upper() == 'COI_OBS':
+#    vtype = 'COI_OBS'
+#    print(f'\nProcessing COI & Observer Verification for')
+#if vtype.upper() == 'TDA':   # ToO or TWI
+#    vtype = 'TDA'
+#    print(f'\nProcessing TDA (ToO or Twilight) Verification for')
+#if vtype.upper() == 'KPF':
+#    vtype = 'KPF'
+#    print(f'\nProcessing KPF Verification for')
 
 sa         = set()                          # required current SAs
 admin      = ['koaadmin', 'hireseng']       # required admins
-#required   = []                             # required all = sa + admin
-test       = ['rtiguitest1', 'rtiuser02']   # optional test
-other      = ['jomeara', 'rcampbell']       # optional other
-ignore     = test + other                   # optional all = test + other
+observers  = {}
+pi         = {}     # always one per prog_code
+#test       = ['rtiguitest1', 'rtiuser02']   # optional test
+#other      = ['jomeara', 'rcampbell']       # optional other
+#ignore     = test + other                   # optional all = test + other
 
 prog_codes = set()
-pi         = {}     # always one per prog_code
-observers  = {}
 sa_info    = {}
 admin_info = {}
+#observer_info = {}
+#pi_info        = {}
 
 # API request for list of current SAs
 url = emp_url
@@ -85,17 +119,17 @@ params = {}
 params["cmd"]     = "getEmployee"
 params["role"]    = "SA"
 
-print(f'emp PARAMS for SAs: {params}')
+#print(f'emp PARAMS for SAs: {params}')
 
 wmko_emp_resp = requests.get(url, params=params, verify=False)
 if not wmko_emp_resp:
     print('NO DATA RESPONSE')
     sys.exit()
 else:
-    sa_data = wmko_emp_resp.json()
+    wmko_emp_data = wmko_emp_resp.json()
 
 sa_obj = {}
-for sa_item in sa_data:
+for sa_item in wmko_emp_data:
     sa_info = {}
     sa_alias = sa_item["Alias"]
     sa_email = f'{sa_item["Alias"]}@keck.hawaii.edu'
@@ -110,44 +144,9 @@ for sa_item in sa_data:
     sa_info["keckid"] = sa_keckid
     sa_obj[sa_alias] = sa_info
 
-# API request for list of current Admins
-url = emp_url
-params = {}
-params["cmd"]     = "getEmployee"
-params["role"]    = "admin"         # check this!!!
-
-print(f'emp PARAMS for SAs: {params}')
-
-wmko_emp_resp = requests.get(url, params=params, verify=False)
-if not wmko_emp_resp:
-    print('NO DATA RESPONSE')
-    sys.exit()
-else:
-    sa_data = wmko_emp_resp.json()
-
-#admin_obj = {}
-#for admin_item in admin:
-#    admin_info = {}
-#    admin_alias = admin_item["Alias"]
-#    admin_email = f'{admin_item["Alias"]}@keck.hawaii.edu'
-#    admin_firstname = admin_item["FirstName"]
-#    admin_lastname = admin_item["LastName"]
-#    admin_keckid = admin_item["EId"]
-#    admin_info["firstname"] = admin_firstname
-#    admin_info["lastname"] = admin_lastname
-#    admin_info["email"] = admin_email
-#    admin_info["alias"] = admin_alias
-#    admin_info["keckid"] = admin_keckid
-#    admin_obj[admin_alias] = admin_info
-    
-
-#required = admin + list(sa)
-
 # ====================
 
-# Type: PI Verification - send report monthly
-#if vtype == 'PI':
-
+# calclates dates for next month
 #today = dt.now()
 #next_month = today.month + 1
 #this_year = today.year
@@ -155,18 +154,17 @@ else:
 #startDate = f'{this_year}-{next_month}-1'
 #startDate = dt.strptime(startDate, '%Y-%m-%d')
 #endDate = startDate + timedelta(days=num_days-1)
-
+#
 #startDate = dt.strftime(startDate, '%Y-%m-%d')
 #endDate   = dt.strftime(endDate, '%Y-%m-%d')
 
-# TEST DATES
+# test dates
 startDate = '2024-01-01'
 endDate = '2024-01-31'
 #num_days = 31
 num_days = 5
-# END TEST DATES
 
-print(f'startDate: {startDate}, endDate: {endDate}, numDays: {num_days}')
+print(f'{startDate} to {endDate} ({num_days} days)\n')
 
 url = sched_url
 params = {}
@@ -174,19 +172,22 @@ params["cmd"]     = "getSchedule"
 params["date"]    = startDate
 params["numdays"] = num_days
 
-print(f'sched PARAMS (PIs for SEMIDs): {params}\n')
+#print(f'sched PARAMS (PIs for SEMIDs): {params}\n')
 
 wmko_sched_resp = requests.get(url, params=params, verify=False)
 if not wmko_sched_resp:
     print('NO DATA RESPONSE')
     sys.exit()
 else:
-    data = wmko_sched_resp.json()
+    wmko_sched_data = wmko_sched_resp.json()
 
-# Type: PI Verification
-# - Grab all unique programs for the upcoming month using the telescope schedule API 
 
-for entry in data:
+# API request for list of current Observers
+url = emp_url
+params = {}
+params["cmd"]       = "getEmployee"
+
+for entry in wmko_sched_data:
     #print(entry)
     prog_code = f"{entry['Semester']}_{entry['ProjCode']}"
     prog_codes.add(prog_code)
@@ -197,7 +198,7 @@ for entry in data:
     else:
         pi_alias = entry['PiEmail']
 
-    pi[prog_code] = f"{entry['PiEmail']}, {entry['PiLastName']}, {entry['PiFirstName']}, {pi_alias}"
+    pi[prog_code] = f"{entry['PiEmail']}, {entry['PiLastName']}, {entry['PiFirstName']}, {pi_alias}, {entry['PiId']}"
 
     # generate Observers per prog_code
     if prog_code not in observers.keys():
@@ -207,56 +208,58 @@ for entry in data:
             #observers[prog_code] += entry["Observers"].split(",")
             observers[prog_code] = entry["Observers"].split(",")   # fixes replicated observers
             observers[prog_code] = set(observers[prog_code])
+            # convert last name to alias (username from email address)
+            # params["lastname"]  = obs_lastname
+            # request...
         else:
             observers[prog_code] = None 
 
-print()
-#print(f'SEMIDS: {prog_codes}\n')      # list of prog_codes
-#print(f'PIs: {pi}\n')
-#print(f'SAs: {sa_obj}\n')    
-#print(f'OBSERVERS: {observers}\n')    # list of observers per prog_code
+for obs_item in observers:
+    # search wmko API 
+    pass
 
-print("***** WMKO API: PI and Observers *****\n")
+#print(f'\n***** WMKO API: {len(prog_codes)} PI and Observers *****\n')
 
-for prog_code in prog_codes:
-    print(f'{prog_code}: {pi[prog_code]}, {observers[prog_code]}')   # wmko everything
-print(f'{len(prog_codes)} prog_codes\n')
+#for prog_code in prog_codes:
+#    print(f'{prog_code}: {pi[prog_code]}, {observers[prog_code]}')   # wmko everything
 
-#print(f'Admins: {admin}')
-print(f'Admins ({len(admin)}):')
-for adm in admin:
-    print(f'{adm}: ')   # get full info from IPAC?
-print()
+#print()
 
-#print(f'SAs: {sa_obj}')
-print(f'SAs ({len(sa_obj)}):')
-for k,v in sa_obj.items():
-    print(f'{k}: {v}')
-print()
+#print(f'Admins ({len(admin)}):')
+#for adm in admin:
+#    print(f'{adm}: ')   # get full info from IPAC?
+#print()
+#
+#print(f'SAs ({len(sa_obj)}):')
+#for k,v in sa_obj.items():
+#    print(f'{k}: {v}')
+#print()
+#
+#print(f'PIs ({len(pi)}):')
+#for k,v in pi.items():
+#    print(f'{k}: {v}')
+#print()
+#
+#print(f'Observers ({len(observers)}):')
+#print(f'Observers Object: {observers}')
+#for k,v in observers.items():
+#    print(f'{k}: {v}')
 
-#print(f'PIs: {pi}')
-print(f'PIs ({len(pi)}):')
-for k,v in pi.items():
-    print(f'{k}: {v}')
-print()
-
-#print(f'Observers: {observers}')
-print(f'Observers ({len(observers)}):')
-for k,v in observers.items():
-    print(f'{k}: {v}')
-print()
+#print()
 
 # ============
 
 # - For each program, query the NExScI data access API to retrieve all accounts that have access 
-print('***** NExScI API *****\n')
+#print(f'***** NExScI API: Evaluating {len(prog_codes)} SEMIDs *****')
+print(f'Processing {len(prog_codes)} SEMIDs')
+print('{semid, access, type, firstname, lastname, email, alias, keckid}')
 
 url = ipac_url
 params = {}
 params["request"] = "GET_USERS_WITH_ACCESS"
 
 for prog_code in prog_codes:
-    print(f'SEMID: {prog_code}')
+    print(f'\n{prog_code}')
     params["semid"] = prog_code
     ipac_resp = requests.get(url, params=params, auth=("KOA","Humu3"))   # use config.live.ini
     ipac_resp = ipac_resp.json()
@@ -267,64 +270,55 @@ for prog_code in prog_codes:
         #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
         ipac_users.add(ipac_obj["email"].split("@")[0])
 
-    print(f' -- IPAC Users    : {ipac_users}')
+    #print(f'   IPAC Users    : {ipac_users}')
 
-    print(f" -- WMKO PI       : {pi[prog_code]}")
-    wmko_pi_alias = pi[prog_code].split(",")[-1].strip()
+    #print(f"   WMKO PI       : {pi[prog_code]}")
 
-    #if wmko_pi_alias in ipac_users:
-    if wmko_pi_alias not in ipac_users:
-        print(f'    Access Required for PI: {pi[prog_code]}')
+    pi_rec    = pi[prog_code].split(",")
+    pi_email  = pi_rec[0].strip()
+    pi_lname  = pi_rec[1].strip()
+    pi_fname  = pi_rec[2].strip()
+    pi_alias  = pi_rec[3].strip()
+    pi_keckid = pi_rec[4].strip()
 
-    print(f" -- WMKO SAs      : {sa}")
-    for a_sa in sa:
-        if a_sa not in ipac_users:
-            print(f'    Access Required for SA: {sa_obj[a_sa]}')
+    if pi_alias not in ipac_users:
+        print(f"{{'{prog_code}', 'required', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}}")
+    else:
+        print(f"{{'{prog_code}', 'ok', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}}")
 
-    print(f" -- WMKO Admins      : {admin}")
+    # need additional admin info from IPAC database
+    #print(f"   WMKO Admins   : {admin}")
     for adm in admin:
         if adm not in ipac_users:
-            print(f'    Access Required for Admin: {adm}')
+            print(f"{{'{prog_code}', 'required', 'admin', None, None, None, '{adm}', None}}")
+        else:
+            print(f"{{'{prog_code}', 'ok', 'admin', None, None, None, '{adm}', None}}")
 
-#    print(f" -- WMKO Observers: {observers[prog_code]}")
+    #print(f"   WMKO SAs      : {sa}")
+    for a_sa in sa:
+        sa_fname  = sa_obj[a_sa]['firstname']
+        sa_lname  = sa_obj[a_sa]['lastname']
+        sa_addr   = sa_obj[a_sa]['email']
+        sa_koaid  = sa_obj[a_sa]['alias']
+        sa_keckid = sa_obj[a_sa]['keckid']
 
-#        if vtype == 'PI':
-#            # process PI
-#            pass
-#        if vtype == 'PI_OPS':
-#            # process PI_OPS
-#            pass
-#        if vtype == 'COI_OBS':
-#            # process COI_OBS
-#            pass
-#        if vtype == 'TDA':
-#            # process TDA - ToO or TWI
-#            pass
-#        if vtype == 'KPF':
-#            # process KPF
-#            pass
+        if a_sa not in ipac_users:
+            print(f"{{'{prog_code}', 'required', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}}")
+        else:
+            print(f"{{'{prog_code}', 'ok', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}}")
+
+    # need additional observer info from IPAC database
+    if vtype == 'PI_OBS':
+        #print(f"   WMKO Observers: {observers[prog_code]}")
+        for obs in observers[prog_code]:
+            if obs not in ipac_users:
+                print(f"{{'{prog_code}', 'required', 'observer', None, '{obs}', None, None, None}}")
+            else:
+                print(f"{{'{prog_code}', 'ok', 'observer', None, '{obs}', None, None, None}}")
 
 print()
 
-# ============
-
-# - Verify that the PI, koaadmin, hireseng, and all SAs have access to that program 
-# - Send an email summary to the KOA helpdesk with information for those programs that need their access updated 
 # def construct email(s)
 
 # def send email(s)
-
-# ================ main entry point
-
-# - logger?
-
-# - accept arguments
-# - set up for vtype
-# - send API request
-
-# - process vtype
-
-# - generate report
-
-# - send report
-
+# - Send an email summary to the KOA helpdesk with information for those programs that need their access updated 

@@ -13,18 +13,19 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - [DONE] args PI vs PI_OBS
-# - fix too many values for Observers output
-# - sort SEMIDs for report
+# - calculate for next month is Jan, next year
 # - arg to override default (next month) with this month (or any month?) for PI
 #   'jan' or '01' or '1'
-# - [DONE] output {} in f-string expressions
 # - case treatment of vtypes
 # - alias/ipac koaid is first initial + last name
 # - transfer API urls and account info to config.live.ini
 # - defs for request params and object displays?
 # - replace "set()" with None for output objects (ipac_users, etc.)
 # - logger messages
+# - [DONE] args PI vs PI_OBS
+# - [DONE] fix too many values for Observers output
+# - [DONE] output {} in f-string expressions
+# - [DONE] sort SEMIDs for report
 
 # daa imports
 import argparse
@@ -146,10 +147,11 @@ for sa_item in wmko_emp_data:
 
 # ====================
 
-# calclates dates for next month
+# default calclates dates for next month (one arg)
 #today = dt.now()
 #next_month = today.month + 1
 #this_year = today.year
+
 #num_days = cal.monthrange(this_year, next_month)[1]
 #startDate = f'{this_year}-{next_month}-1'
 #startDate = dt.strptime(startDate, '%Y-%m-%d')
@@ -161,8 +163,8 @@ for sa_item in wmko_emp_data:
 # test dates
 startDate = '2024-01-01'
 endDate = '2024-01-31'
-#num_days = 31
-num_days = 5
+num_days = 31
+#num_days = 5
 
 print(f'{startDate} to {endDate} ({num_days} days)\n')
 
@@ -213,6 +215,9 @@ for entry in wmko_sched_data:
             # request...
         else:
             observers[prog_code] = None 
+
+prog_codes = list(prog_codes)
+prog_codes.sort()
 
 for obs_item in observers:
     # search wmko API 

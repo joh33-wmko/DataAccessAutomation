@@ -17,7 +17,8 @@
 #   - 'jan' or '01' or '1'
 #   - calculate for next month is Jan, next year
 # - email send output, and to koaadmin at IPAC: ______
-# - logger messages
+# - results for observers now includes email addresses
+# - logger messages without kpython3
 # - alias/ipac koaid is first initial + last name
 # - defs for request params and object displays?
 # - replace "set()" with None for output objects (ipac_users, etc.)
@@ -27,6 +28,7 @@
 # - [DONE] output {} in f-string expressions
 # - [DONE] sort SEMIDs for report
 # - [DONE] transfer API urls and account info to config.live.ini
+# - [DONE] logger messages with kpython3
 
 # daa imports
 import argparse
@@ -38,8 +40,8 @@ import sys
 import urllib3
 urllib3.disable_warnings()
 
-# logger imports
-#from LoggerClient import Logger as dl
+# logger imports - stopped working
+from LoggerClient import Logger as dl
 import os
 import logging
 from logging import StreamHandler, FileHandler
@@ -58,8 +60,8 @@ def create_logger(subsystem, configLoc, author, progid, semid, fileName, loggern
     logger.setLevel(logging.INFO)
     return logger
 
-#tclogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')
-#tclogger.info('Running KOA Data Access Automation')
+daalogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')
+daalogger.info('Running KOA Data Access Automation')
 
 # Prepare config file
 from os.path import dirname
@@ -82,18 +84,23 @@ vtype = args.vtype
 if vtype.upper() == 'PI':
     vtype = 'PI'
     print(f'\nProcessing PI Verification for')
+    daalogger.info('Running PI Verification Report')
 if vtype.upper() == 'PI_OBS':
     vtype = 'PI_OBS'
     print(f'\nProcessing PI & Observer Verification for')
+    daalogger.info('Running PI_OBS Verification Report')
 #if vtype.upper() == 'COI_OBS':
 #    vtype = 'COI_OBS'
+#    daalogger.info('Running COI_OBS Verification Report')
 #    print(f'\nProcessing COI & Observer Verification for')
 #if vtype.upper() == 'TDA':   # ToO or TWI
 #    vtype = 'TDA'
 #    print(f'\nProcessing TDA (ToO or Twilight) Verification for')
+#    daalogger.info('Running TDA (ToO/TWI) Verification Report')
 #if vtype.upper() == 'KPF':
 #    vtype = 'KPF'
 #    print(f'\nProcessing KPF Verification for')
+#    daalogger.info('Running KPF Verification Report')
 
 sa         = set()                          # required current SAs
 admin      = ['koaadmin', 'hireseng']       # required admins
@@ -321,3 +328,6 @@ print()
 
 # def send email(s)
 # - Send an email summary to the KOA helpdesk with information for those programs that need their access updated 
+
+
+daalogger.info('KOA Data Access Automation Finished')

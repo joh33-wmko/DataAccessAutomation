@@ -71,22 +71,6 @@ filename = f'{dirname}/{configFile}'
 assert os.path.isfile(filename), f"ERROR: {filename} file missing"
 with open(filename) as f: config = yaml.safe_load(f)
 
-
-# APIs (move to config.live.ini)
-
-# WMKO Employee API
-# emp_url = "https://www3build.keck.hawaii.edu/api/employee"
-# https://vm-appserver.keck.hawaii.edu/api/employee/getEmployee?role=SA
-#emp_url = "https://vm-appserver.keck.hawaii.edu/api/employee"
-
-# WMKO Telescope Schedule API
-# sched_url = "https://www3build.keck.hawaii.edu/api/schedule"
-# https://vm-appserver.keck.hawaii.edu/api/schedule/getSchedule?date=2024-01-17
-#sched_url = "https://vm-appserver.keck.hawaii.edu/api/schedule"
-
-# IPAC Access API (for GET_USERS_WITH_ACCESS and GET_SEMIDS_PER_USER)
-#ipac_url = "http://vmkoatest.ipac.caltech.edu:8001/cgi-bin/PIAccess/nph-PIAccess_Auth.py"
-
 print(f'\nKOA DATA ACCESS AUTOMATION (DAA) REPORT')
 
 # parse command line arguments

@@ -13,19 +13,20 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - calculate for next month is Jan, next year
 # - arg to override default (next month) with this month (or any month?) for PI
-#   'jan' or '01' or '1'
-# - case treatment of vtypes
+#   - 'jan' or '01' or '1'
+#   - calculate for next month is Jan, next year
+# - email send output, and to koaadmin at IPAC: ______
+# - logger messages
 # - alias/ipac koaid is first initial + last name
-# - transfer API urls and account info to config.live.ini
 # - defs for request params and object displays?
 # - replace "set()" with None for output objects (ipac_users, etc.)
-# - logger messages
+# - case treatment of vtypes
 # - [DONE] args PI vs PI_OBS
 # - [DONE] fix too many values for Observers output
 # - [DONE] output {} in f-string expressions
 # - [DONE] sort SEMIDs for report
+# - [DONE] transfer API urls and account info to config.live.ini
 
 # daa imports
 import argparse
@@ -60,21 +61,31 @@ def create_logger(subsystem, configLoc, author, progid, semid, fileName, loggern
 #tclogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')
 #tclogger.info('Running KOA Data Access Automation')
 
+# Prepare config file
+from os.path import dirname
+import yaml
+
+dirname = dirname(__file__)
+configFile = "config.live.ini"
+filename = f'{dirname}/{configFile}'
+assert os.path.isfile(filename), f"ERROR: {filename} file missing"
+with open(filename) as f: config = yaml.safe_load(f)
+
 
 # APIs (move to config.live.ini)
 
 # WMKO Employee API
 # emp_url = "https://www3build.keck.hawaii.edu/api/employee"
 # https://vm-appserver.keck.hawaii.edu/api/employee/getEmployee?role=SA
-emp_url = "https://vm-appserver.keck.hawaii.edu/api/employee"
+#emp_url = "https://vm-appserver.keck.hawaii.edu/api/employee"
 
 # WMKO Telescope Schedule API
 # sched_url = "https://www3build.keck.hawaii.edu/api/schedule"
 # https://vm-appserver.keck.hawaii.edu/api/schedule/getSchedule?date=2024-01-17
-sched_url = "https://vm-appserver.keck.hawaii.edu/api/schedule"
+#sched_url = "https://vm-appserver.keck.hawaii.edu/api/schedule"
 
 # IPAC Access API (for GET_USERS_WITH_ACCESS and GET_SEMIDS_PER_USER)
-ipac_url = "http://vmkoatest.ipac.caltech.edu:8001/cgi-bin/PIAccess/nph-PIAccess_Auth.py"
+#ipac_url = "http://vmkoatest.ipac.caltech.edu:8001/cgi-bin/PIAccess/nph-PIAccess_Auth.py"
 
 print(f'\nKOA DATA ACCESS AUTOMATION (DAA) REPORT')
 
@@ -115,7 +126,7 @@ admin_info = {}
 #pi_info        = {}
 
 # API request for list of current SAs
-url = emp_url
+url = config['API']['EMP_URL']
 params = {}
 params["cmd"]     = "getEmployee"
 params["role"]    = "SA"
@@ -151,7 +162,6 @@ for sa_item in wmko_emp_data:
 #today = dt.now()
 #next_month = today.month + 1
 #this_year = today.year
-
 #num_days = cal.monthrange(this_year, next_month)[1]
 #startDate = f'{this_year}-{next_month}-1'
 #startDate = dt.strptime(startDate, '%Y-%m-%d')
@@ -163,12 +173,12 @@ for sa_item in wmko_emp_data:
 # test dates
 startDate = '2024-01-01'
 endDate = '2024-01-31'
-num_days = 31
-#num_days = 5
+#num_days = 31
+num_days = 5
 
 print(f'{startDate} to {endDate} ({num_days} days)\n')
 
-url = sched_url
+url = config['API']['SCHED_URL']
 params = {}
 params["cmd"]     = "getSchedule"
 params["date"]    = startDate
@@ -185,7 +195,7 @@ else:
 
 
 # API request for list of current Observers
-url = emp_url
+url = config['API']['EMP_URL']
 params = {}
 params["cmd"]       = "getEmployee"
 
@@ -259,14 +269,14 @@ for obs_item in observers:
 print(f'Processing {len(prog_codes)} SEMIDs')
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')
 
-url = ipac_url
+url = config['API']['IPAC_URL']
 params = {}
 params["request"] = "GET_USERS_WITH_ACCESS"
 
 for prog_code in prog_codes:
     print(f'\n{prog_code}')
     params["semid"] = prog_code
-    ipac_resp = requests.get(url, params=params, auth=("KOA","Humu3"))   # use config.live.ini
+    ipac_resp = requests.get(url, params=params, auth=(config['ipac']['user'],config['ipac']['pwd']))
     ipac_resp = ipac_resp.json()
 
     ipac_users = set()

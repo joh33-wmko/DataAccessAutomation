@@ -1,0 +1,6 @@
+#.gitignore
+*.swp
+config.live.ini
+__pycache__/
+data/
+orig/

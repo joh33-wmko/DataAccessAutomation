@@ -15,12 +15,13 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - format output as one single large object
 # - alias/ipac koaid is first initial + last name
 # - logger messages without kpython3
+# - readable vs minified version
 # - email send output, and to koaadmin at IPAC: ______
 # - results for observers now includes email addresses
 # - replace "set()" with None for output objects (ipac_users, etc.)
+# - clean up imports (PEP8)
 # - defs for request params and object displays?
 # - case treatment of vtypes
 # - [DONE] args PI vs PI_OBS
@@ -30,8 +31,9 @@
 # - [DONE] transfer API urls and account info to config.live.ini
 # - [DONE] logger messages with kpython3
 # - [DONE] arg to override default (next month) with this month (or any month?) for PI
-#   [DONE] - 'jan' or '01' or '1'
-#   [DONE] - calculate for next month is Jan, next year
+#   - [DONE] 'jan' or '01' or '1'
+#   - [DONE] calculate for next month is Jan, next year
+# - [DONE] format output as one single large object
 
 # daa imports
 import argparse
@@ -68,7 +70,7 @@ def create_logger(subsystem, configLoc, author, progid, semid, fileName, loggern
 #daalogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')   # toggle for logger
 #daalogger.info('Running KOA Data Access Automation')   # toggle for logger
 
-# Prepare config file
+# prepare config file
 from os.path import dirname
 import yaml
 
@@ -110,37 +112,13 @@ if vtype.upper() == 'PI_OBS':
 
 
 if not args.date:
-#    # default calclates dates for next month (one arg)
-#    # what if current month is Dec? next month will also need to advance one year
-#    today = dt.now()
-#    next_month = today.month + 1
-#    this_year = today.year
-#    num_days = cal.monthrange(this_year, next_month)[1]
-#    startDate = f'{this_year}-{next_month}-1'
-#    startDate = dt.strptime(startDate, '%Y-%m-%d')
-#    endDate = startDate + timedelta(days=num_days-1)
-
     next_month = dt.today() + relativedelta(day=1, months=1)
-    #print(f'next month is {next_month}')
-
     run_year = next_month.year
-    #print(f'run year is {run_year}')
     run_month = next_month.month
-    #print(f'run month is {run_month}')
-    
     num_days = cal.monthrange(run_year, run_month)[1]
-    #print(f'num_days is {num_days}')
-    
     startDate = f'{run_year}-{run_month}-1'
-    #print(f'starDate str is {startDate}')
-    
     startDate = dt.strptime(startDate, '%Y-%m-%d')
-    #print(f'starDate obj is {startDate}')
-    
     endDate = startDate + timedelta(days=num_days-1)
-    #print(f'endDate obj is {endDate}')
-
-    
     startDate = dt.strftime(startDate, '%Y-%m-%d')
     endDate   = dt.strftime(endDate, '%Y-%m-%d')
 else:
@@ -152,28 +130,30 @@ else:
     startDate = f'{run_year}-{run_month}-{run_day}'
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
-    
     startDate = dt.strftime(startDate, '%Y-%m-%d')
     endDate = dt.strftime(endDate, '%Y-%m=%d')
 
 print(f'{startDate} to {endDate} ({num_days} days)\n')
 #daalogger.info('Running KOA DAA for {startDate} to {endDate} ({num_days} days')   # toggle logger
 
-sa         = set()                          # required current SAs
-admin      = ['koaadmin', 'hireseng']       # required admins
+# initializations
+pi         = {}                              # required; always one per prog_code
+#pi_info    = {}
+sa         = set()                           # required current SAs
+sa_info    = {}
+admin      = ['koaadmin', 'hireseng']        # required admins
+admin_info = {}
 observers  = {}
-pi         = {}     # always one per prog_code
+#observer_info = {}
 #test       = ['rtiguitest1', 'rtiuser02']   # optional test
 #other      = ['jomeara', 'rcampbell']       # optional other
 #ignore     = test + other                   # optional all = test + other
-
 prog_codes = set()
-sa_info    = {}
-admin_info = {}
-#observer_info = {}
-#pi_info        = {}
 
-# API request for list of current SAs
+# ----- create data objects -----
+
+# API request for list of current SAs - will only change for new and departing SAs
+
 url = config['API']['EMP_URL']
 params = {}
 params["cmd"]     = "getEmployee"
@@ -204,7 +184,7 @@ for sa_item in wmko_emp_data:
     sa_info["keckid"] = sa_keckid
     sa_obj[sa_alias] = sa_info
 
-# ====================
+# ----- generate PI and OBS objects from schedule API -----
 
 url = config['API']['SCHED_URL']
 params = {}
@@ -221,11 +201,10 @@ if not wmko_sched_resp:
 else:
     wmko_sched_data = wmko_sched_resp.json()
 
-
 # API request for list of current Observers
-url = config['API']['EMP_URL']
-params = {}
-params["cmd"]       = "getEmployee"
+#url = config['API']['EMP_URL']
+#params = {}
+#params["cmd"]       = "getEmployee"
 
 for entry in wmko_sched_data:
     #print(entry)
@@ -248,7 +227,7 @@ for entry in wmko_sched_data:
             #observers[prog_code] += entry["Observers"].split(",")
             observers[prog_code] = entry["Observers"].split(",")   # fixes replicated observers
             observers[prog_code] = set(observers[prog_code])
-            # convert last name to alias (username from email address)
+            # convert last name to alias (username from email address or first initial + last name?)
             # params["lastname"]  = obs_lastname
             # request...
         else:
@@ -257,10 +236,9 @@ for entry in wmko_sched_data:
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
-for obs_item in observers:
-    # search wmko API 
-    pass
+# ----- objects viewer -----
 
+# ============
 #print(f'\n***** WMKO API: {len(prog_codes)} PI and Observers *****\n')
 
 #for prog_code in prog_codes:
@@ -289,22 +267,25 @@ for obs_item in observers:
 #    print(f'{k}: {v}')
 
 #print()
-
 # ============
 
-# - For each program, query the NExScI data access API to retrieve all accounts that have access 
+# ----- generate report -----
+
+# for each program, query the NExScI data access API to retrieve all accounts that have access 
 #print(f'***** NExScI API: Evaluating {len(prog_codes)} SEMIDs *****')
+
 print(f'Processing {len(prog_codes)} SEMIDs')
 #daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs')   # toggle for logger
 
-print('{semid, access, type, firstname, lastname, email, alias, keckid}')
+print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
 
 url = config['API']['IPAC_URL']
 params = {}
 params["request"] = "GET_USERS_WITH_ACCESS"
 
+print('\n{')
 for prog_code in prog_codes:
-    print(f'\n{prog_code}')
+    print(f'    \'{prog_code}\': {{')
     ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
     #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
@@ -330,17 +311,17 @@ for prog_code in prog_codes:
     pi_keckid = pi_rec[4].strip()
 
     if pi_alias not in ipac_users:
-        print(f"{{'{prog_code}', 'required', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}}")
+        print(f"        {{'{prog_code}', 'required', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}},")
     else:
-        print(f"{{'{prog_code}', 'ok', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}}")
+        print(f"        {{'{prog_code}', 'ok', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}},")
 
     # need additional admin info from IPAC database
     #print(f"   WMKO Admins   : {admin}")
     for adm in admin:
         if adm not in ipac_users:
-            print(f"{{'{prog_code}', 'required', 'admin', None, None, None, '{adm}', None}}")
+            print(f"        {{'{prog_code}', 'required', 'admin', None, None, None, '{adm}', None}},")
         else:
-            print(f"{{'{prog_code}', 'ok', 'admin', None, None, None, '{adm}', None}}")
+            print(f"        {{'{prog_code}', 'ok', 'admin', None, None, None, '{adm}', None}},")
 
     #print(f"   WMKO SAs      : {sa}")
     for a_sa in sa:
@@ -351,19 +332,22 @@ for prog_code in prog_codes:
         sa_keckid = sa_obj[a_sa]['keckid']
 
         if a_sa not in ipac_users:
-            print(f"{{'{prog_code}', 'required', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}}")
+            print(f"        {{'{prog_code}', 'required', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}},")
         else:
-            print(f"{{'{prog_code}', 'ok', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}}")
+            print(f"        {{'{prog_code}', 'ok', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}},")
 
     # need additional observer info from IPAC database
     if vtype == 'PI_OBS':
         #print(f"   WMKO Observers: {observers[prog_code]}")
         for obs in observers[prog_code]:
             if obs not in ipac_users:
-                print(f"{{'{prog_code}', 'required', 'observer', None, '{obs}', None, None, None}}")
+                print(f"        {{'{prog_code}', 'required', 'observer', None, '{obs}', None, None, None}},")
             else:
-                print(f"{{'{prog_code}', 'ok', 'observer', None, '{obs}', None, None, None}}")
+                print(f"        {{'{prog_code}', 'ok', 'observer', None, '{obs}', None, None, None}},")
 
+    print('    },')
+
+print('}')
 print()
 
 # def construct email(s)

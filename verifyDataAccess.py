@@ -15,6 +15,7 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
+# - IPAC admins missing data
 # - logger messages without kpython3
 # - readable vs minified version
 # - email send output, and to koaadmin at IPAC: ______

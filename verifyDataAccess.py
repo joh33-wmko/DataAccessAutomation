@@ -5,7 +5,7 @@
 # - run via command line with date $ python3 ./verifyDataAccess.py --date yyyy-m[m]
 #   ex.  $ python3 ./verifyDataAccess.py --date 2024-3 will run for Mar 2024
 # - TBD - runs daily via cron
-# - run with kpython3 for logger functionality
+# - run with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
 
 # Verification Types (vtype) to be processed
 # - PI                : PI Verification
@@ -15,11 +15,9 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - alias/ipac koaid is first initial + last name
 # - logger messages without kpython3
 # - readable vs minified version
 # - email send output, and to koaadmin at IPAC: ______
-# - results for observers now includes email addresses
 # - replace "set()" with None for output objects (ipac_users, etc.)
 # - clean up imports (PEP8)
 # - defs for request params and object displays?
@@ -34,6 +32,9 @@
 #   - [DONE] 'jan' or '01' or '1'
 #   - [DONE] calculate for next month is Jan, next year
 # - [DONE] format output as one single large object
+# - [DONE] results for observers now includes email addresses
+# - [INFO] keck alias/ipac username is first initial + last name
+# - [INFO] ipac calls keck id koaid
 
 # daa imports
 import argparse
@@ -201,11 +202,6 @@ if not wmko_sched_resp:
 else:
     wmko_sched_data = wmko_sched_resp.json()
 
-# API request for list of current Observers
-#url = config['API']['EMP_URL']
-#params = {}
-#params["cmd"]       = "getEmployee"
-
 for entry in wmko_sched_data:
     #print(entry)
     prog_code = f"{entry['Semester']}_{entry['ProjCode']}"
@@ -227,9 +223,6 @@ for entry in wmko_sched_data:
             #observers[prog_code] += entry["Observers"].split(",")
             observers[prog_code] = entry["Observers"].split(",")   # fixes replicated observers
             observers[prog_code] = set(observers[prog_code])
-            # convert last name to alias (username from email address or first initial + last name?)
-            # params["lastname"]  = obs_lastname
-            # request...
         else:
             observers[prog_code] = None 
 
@@ -279,9 +272,15 @@ print(f'Processing {len(prog_codes)} SEMIDs')
 
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
 
-url = config['API']['IPAC_URL']
-params = {}
-params["request"] = "GET_USERS_WITH_ACCESS"
+# API request for list of current Observers
+#obs_url = config['API']['SCHED_URL']
+obs_url = config['API']['OBS_URL']
+obs_params = {}
+obs_params["cmd"]       = "getObserverInfo"
+
+ipac_url = config['API']['IPAC_URL']
+ipac_params = {}
+ipac_params["request"] = "GET_USERS_WITH_ACCESS"
 
 print('\n{')
 for prog_code in prog_codes:
@@ -289,8 +288,8 @@ for prog_code in prog_codes:
     ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
     #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
-    params["semid"] = prog_code
-    ipac_resp = requests.get(url, params=params, auth=(config['ipac']['user'],config['ipac']['pwd']))
+    ipac_params["semid"] = prog_code
+    ipac_resp = requests.get(ipac_url, params=ipac_params, auth=(config['ipac']['user'],config['ipac']['pwd']))
     ipac_resp = ipac_resp.json()
 
     ipac_users = set()
@@ -339,12 +338,23 @@ for prog_code in prog_codes:
     # need additional observer info from IPAC database
     if vtype == 'PI_OBS':
         #print(f"   WMKO Observers: {observers[prog_code]}")
-        for obs in observers[prog_code]:
-            if obs not in ipac_users:
-                print(f"        {{'{prog_code}', 'required', 'observer', None, '{obs}', None, None, None}},")
-            else:
-                print(f"        {{'{prog_code}', 'ok', 'observer', None, '{obs}', None, None, None}},")
 
+        for obs_lname in observers[prog_code]:
+            obs_params["last"]  = obs_lname
+            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
+            wmko_obs_resp = wmko_obs_resp.json()
+            for item in wmko_obs_resp:
+                #print(f'item is {item}')
+                obs_lname = item["LastName"]
+                obs_fname = item["FirstName"]
+                obs_email = item["Email"]
+                obs_id    = item["Id"]
+                obs_user  = item["username"]
+
+            if obs_user not in ipac_users:
+                print(f"        {{'{prog_code}', 'required', 'observer', '{obs_fname}', '{obs_lname}', '{obs_email}', '{obs_user}', '{obs_id}'}},")
+            else:
+                print(f"        {{'{prog_code}', 'ok', 'observer', '{obs_fname}', '{obs_lname}', '{obs_email}', '{obs_user}', '{obs_id}'}},")
     print('    },')
 
 print('}')

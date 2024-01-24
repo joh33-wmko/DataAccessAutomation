@@ -1,7 +1,9 @@
 #! /usr/local/anaconda/bin/pyton
 
 # KOA Data Access Automation (DAA)
-# - run via cron on desired date for next month
+# - run via cron on desired date for next month (default)
+# - run via command line with date $ python3 ./verifyDataAccess.py --date yyyy-m[m]
+#   ex.  $ python3 ./verifyDataAccess.py --date 2024-3 will run for Mar 2024
 # - TBD - runs daily via cron
 # - run with kpython3 for logger functionality
 
@@ -13,15 +15,13 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - arg to override default (next month) with this month (or any month?) for PI
-#   - 'jan' or '01' or '1'
-#   - calculate for next month is Jan, next year
+# - format output as one single large object
+# - alias/ipac koaid is first initial + last name
+# - logger messages without kpython3
 # - email send output, and to koaadmin at IPAC: ______
 # - results for observers now includes email addresses
-# - logger messages without kpython3
-# - alias/ipac koaid is first initial + last name
-# - defs for request params and object displays?
 # - replace "set()" with None for output objects (ipac_users, etc.)
+# - defs for request params and object displays?
 # - case treatment of vtypes
 # - [DONE] args PI vs PI_OBS
 # - [DONE] fix too many values for Observers output
@@ -29,19 +29,24 @@
 # - [DONE] sort SEMIDs for report
 # - [DONE] transfer API urls and account info to config.live.ini
 # - [DONE] logger messages with kpython3
+# - [DONE] arg to override default (next month) with this month (or any month?) for PI
+#   [DONE] - 'jan' or '01' or '1'
+#   [DONE] - calculate for next month is Jan, next year
 
 # daa imports
 import argparse
 import calendar as cal
 from datetime import datetime as dt, timedelta
+from dateutil.relativedelta import relativedelta
+
 import json
 import requests
 import sys
 import urllib3
 urllib3.disable_warnings()
 
-# logger imports - stopped working
-from LoggerClient import Logger as dl
+# logger imports - need kpython3 on command line (see Jeff's fix)
+#from LoggerClient import Logger as dl   # toggle for logger
 import os
 import logging
 from logging import StreamHandler, FileHandler
@@ -60,8 +65,8 @@ def create_logger(subsystem, configLoc, author, progid, semid, fileName, loggern
     logger.setLevel(logging.INFO)
     return logger
 
-daalogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')
-daalogger.info('Running KOA Data Access Automation')
+#daalogger = create_logger('Data Access Automation', None, 'JPH', None, None, None, 'koa')   # toggle for logger
+#daalogger.info('Running KOA Data Access Automation')   # toggle for logger
 
 # Prepare config file
 from os.path import dirname
@@ -78,29 +83,81 @@ print(f'\nKOA DATA ACCESS AUTOMATION (DAA) REPORT')
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Verify Data Access")
 parser.add_argument("vtype")
+parser.add_argument("--date", help="Run Date Format is YYYY-MM", required=False)
 args = parser.parse_args()
 
 vtype = args.vtype
 if vtype.upper() == 'PI':
     vtype = 'PI'
     print(f'\nProcessing PI Verification for')
-    daalogger.info('Running PI Verification Report')
+    #daalogger.info('Running PI Verification Report')   # toggle for logger
 if vtype.upper() == 'PI_OBS':
     vtype = 'PI_OBS'
     print(f'\nProcessing PI & Observer Verification for')
-    daalogger.info('Running PI_OBS Verification Report')
+    #daalogger.info('Running PI_OBS Verification Report')   # toggle for logger
 #if vtype.upper() == 'COI_OBS':
 #    vtype = 'COI_OBS'
-#    daalogger.info('Running COI_OBS Verification Report')
+#    daalogger.info('Running COI_OBS Verification Report')   # toggle for logger
 #    print(f'\nProcessing COI & Observer Verification for')
 #if vtype.upper() == 'TDA':   # ToO or TWI
 #    vtype = 'TDA'
 #    print(f'\nProcessing TDA (ToO or Twilight) Verification for')
-#    daalogger.info('Running TDA (ToO/TWI) Verification Report')
+#    daalogger.info('Running TDA (ToO/TWI) Verification Report')   # toggle for logger
 #if vtype.upper() == 'KPF':
 #    vtype = 'KPF'
 #    print(f'\nProcessing KPF Verification for')
-#    daalogger.info('Running KPF Verification Report')
+#    daalogger.info('Running KPF Verification Report')   # toggle for logger
+
+
+if not args.date:
+#    # default calclates dates for next month (one arg)
+#    # what if current month is Dec? next month will also need to advance one year
+#    today = dt.now()
+#    next_month = today.month + 1
+#    this_year = today.year
+#    num_days = cal.monthrange(this_year, next_month)[1]
+#    startDate = f'{this_year}-{next_month}-1'
+#    startDate = dt.strptime(startDate, '%Y-%m-%d')
+#    endDate = startDate + timedelta(days=num_days-1)
+
+    next_month = dt.today() + relativedelta(day=1, months=1)
+    #print(f'next month is {next_month}')
+
+    run_year = next_month.year
+    #print(f'run year is {run_year}')
+    run_month = next_month.month
+    #print(f'run month is {run_month}')
+    
+    num_days = cal.monthrange(run_year, run_month)[1]
+    #print(f'num_days is {num_days}')
+    
+    startDate = f'{run_year}-{run_month}-1'
+    #print(f'starDate str is {startDate}')
+    
+    startDate = dt.strptime(startDate, '%Y-%m-%d')
+    #print(f'starDate obj is {startDate}')
+    
+    endDate = startDate + timedelta(days=num_days-1)
+    #print(f'endDate obj is {endDate}')
+
+    
+    startDate = dt.strftime(startDate, '%Y-%m-%d')
+    endDate   = dt.strftime(endDate, '%Y-%m-%d')
+else:
+    run_date = args.date.split('-')
+    run_year = int(run_date[0])
+    run_month = int(run_date[1])
+    run_day = 1
+    num_days = cal.monthrange(run_year, run_month)[1]
+    startDate = f'{run_year}-{run_month}-{run_day}'
+    startDate = dt.strptime(startDate, '%Y-%m-%d')
+    endDate = startDate + timedelta(days=num_days-1)
+    
+    startDate = dt.strftime(startDate, '%Y-%m-%d')
+    endDate = dt.strftime(endDate, '%Y-%m=%d')
+
+print(f'{startDate} to {endDate} ({num_days} days)\n')
+#daalogger.info('Running KOA DAA for {startDate} to {endDate} ({num_days} days')   # toggle logger
 
 sa         = set()                          # required current SAs
 admin      = ['koaadmin', 'hireseng']       # required admins
@@ -148,26 +205,6 @@ for sa_item in wmko_emp_data:
     sa_obj[sa_alias] = sa_info
 
 # ====================
-
-# default calclates dates for next month (one arg)
-#today = dt.now()
-#next_month = today.month + 1
-#this_year = today.year
-#num_days = cal.monthrange(this_year, next_month)[1]
-#startDate = f'{this_year}-{next_month}-1'
-#startDate = dt.strptime(startDate, '%Y-%m-%d')
-#endDate = startDate + timedelta(days=num_days-1)
-#
-#startDate = dt.strftime(startDate, '%Y-%m-%d')
-#endDate   = dt.strftime(endDate, '%Y-%m-%d')
-
-# test dates
-startDate = '2024-01-01'
-endDate = '2024-01-31'
-#num_days = 31
-num_days = 5
-
-print(f'{startDate} to {endDate} ({num_days} days)\n')
 
 url = config['API']['SCHED_URL']
 params = {}
@@ -258,6 +295,8 @@ for obs_item in observers:
 # - For each program, query the NExScI data access API to retrieve all accounts that have access 
 #print(f'***** NExScI API: Evaluating {len(prog_codes)} SEMIDs *****')
 print(f'Processing {len(prog_codes)} SEMIDs')
+#daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs')   # toggle for logger
+
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')
 
 url = config['API']['IPAC_URL']
@@ -266,6 +305,9 @@ params["request"] = "GET_USERS_WITH_ACCESS"
 
 for prog_code in prog_codes:
     print(f'\n{prog_code}')
+    ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
+    #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
+
     params["semid"] = prog_code
     ipac_resp = requests.get(url, params=params, auth=(config['ipac']['user'],config['ipac']['pwd']))
     ipac_resp = ipac_resp.json()
@@ -330,4 +372,4 @@ print()
 # - Send an email summary to the KOA helpdesk with information for those programs that need their access updated 
 
 
-daalogger.info('KOA Data Access Automation Finished')
+#daalogger.info('KOA Data Access Automation Finished')   # toggle for logger

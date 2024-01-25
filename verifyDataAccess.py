@@ -19,6 +19,7 @@
 # - send output to koaadmin at IPAC: ______
 # - IPAC admins missing data - pending IPAC API users access
 # - replace "set()" with None for output objects (ipac_users, etc.)
+# - calculate last Mon of current month >= 7 days before next month
 # - clean up imports (PEP8)
 # - defs for request params and object displays?
 # - case treatment of vtypes
@@ -100,28 +101,28 @@ args = parser.parse_args()
 vtype = args.vtype
 if vtype.upper() == 'PI':
     vtype = 'PI'
-    print(f'\nProcessing PI Verification for')
-    message = ''.join((message, '\nProcessing PI Verification for'))
+    print(f'\nProcessing PI Verification for ')
+    message = ''.join((message, '\nProcessing PI Verification for '))
     #daalogger.info('Running PI Verification Report')   # toggle for logger
 if vtype.upper() == 'PI_OBS':
     vtype = 'PI_OBS'
-    print(f'\nProcessing PI & Observer Verification for')
-    message = ''.join((message, '\nProcessing PI & Observer Verification for'))
+    print(f'\nProcessing PI & Observer Verification for ')
+    message = ''.join((message, '\nProcessing PI & Observer Verification for '))
     #daalogger.info('Running PI_OBS Verification Report')   # toggle for logger
 #if vtype.upper() == 'COI_OBS':
 #    vtype = 'COI_OBS'
 #    daalogger.info('Running COI_OBS Verification Report')   # toggle for logger
-#    print(f'\nProcessing COI & Observer Verification for')
-#    message = ''.join((message, '\nProcessing COI & Observer Verification for'))
+#    print(f'\nProcessing COI & Observer Verification for ')
+#    message = ''.join((message, '\nProcessing COI & Observer Verification for '))
 #if vtype.upper() == 'TDA':   # ToO or TWI
 #    vtype = 'TDA'
-#    print(f'\nProcessing TDA (ToO or Twilight) Verification for')
-#    message = ''.join((message, '\nProcessing TDA (ToO or Twilight) Verification for'))
+#    print(f'\nProcessing TDA (ToO or Twilight) Verification for ')
+#    message = ''.join((message, '\nProcessing TDA (ToO or Twilight) Verification for '))
 #    daalogger.info('Running TDA (ToO/TWI) Verification Report')   # toggle for logger
 #if vtype.upper() == 'KPF':
 #    vtype = 'KPF'
-#    print(f'\nProcessing KPF Verification for')
-#    message = ''.join((message, '\nProcessing KPF Verification for'))
+#    print(f'\nProcessing KPF Verification for ')
+#    message = ''.join((message, '\nProcessing KPF Verification for '))
 #    daalogger.info('Running KPF Verification Report')   # toggle for logger
 
 
@@ -271,9 +272,9 @@ prog_codes.sort()
 
 # ----- generate report -----
 
-print(f'Processing {len(prog_codes)} SEMIDs')
-message = ''.join((message, f'Processing {len(prog_codes)} SEMIDs\n'))
-#daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs')   # toggle for logger
+print(f'{len(prog_codes)} SEMIDs found')
+message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
+#daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
 
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
 message = ''.join((message, '{semid, access, type, firstname, lastname, email, alias, keckid}\n'))

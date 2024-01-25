@@ -15,7 +15,6 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
-# - IPAC admins missing data
 # - logger messages without kpython3
 # - readable vs minified version
 # - email send output, and to koaadmin at IPAC: ______
@@ -23,6 +22,7 @@
 # - clean up imports (PEP8)
 # - defs for request params and object displays?
 # - case treatment of vtypes
+# - IPAC admins missing data - pending IPAC API users access
 # - [DONE] args PI vs PI_OBS
 # - [DONE] fix too many values for Observers output
 # - [DONE] output {} in f-string expressions
@@ -133,35 +133,33 @@ else:
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
     startDate = dt.strftime(startDate, '%Y-%m-%d')
-    endDate = dt.strftime(endDate, '%Y-%m=%d')
+    endDate = dt.strftime(endDate, '%Y-%m-%d')
 
 print(f'{startDate} to {endDate} ({num_days} days)\n')
 #daalogger.info('Running KOA DAA for {startDate} to {endDate} ({num_days} days')   # toggle logger
 
 # initializations
-pi         = {}                              # required; always one per prog_code
-#pi_info    = {}
-sa         = set()                           # required current SAs
-sa_info    = {}
-admin      = ['koaadmin', 'hireseng']        # required admins
-admin_info = {}
-observers  = {}
+pi             = {}                              # required; always one per prog_code
+#pi_info       = {}
+sa             = set()                           # required current SAs
+sa_info        = {}
+admins         = ['koaadmin', 'hireseng']        # required admins
+#admin_info     = {}
+observers      = {}
 #observer_info = {}
-#test       = ['rtiguitest1', 'rtiuser02']   # optional test
-#other      = ['jomeara', 'rcampbell']       # optional other
-#ignore     = test + other                   # optional all = test + other
-prog_codes = set()
+#test          = ['rtiguitest1', 'rtiuser02']   # optional test
+#other         = ['jomeara', 'rcampbell']       # optional other
+#ignore        = test + other                   # optional all = test + other
+prog_codes     = set()
 
 # ----- create data objects -----
 
 # API request for list of current SAs - will only change for new and departing SAs
 
 url = config['API']['EMP_URL']
-params = {}
+params            = {}
 params["cmd"]     = "getEmployee"
 params["role"]    = "SA"
-
-#print(f'emp PARAMS for SAs: {params}')
 
 wmko_emp_resp = requests.get(url, params=params, verify=False)
 if not wmko_emp_resp:
@@ -193,8 +191,6 @@ params = {}
 params["cmd"]     = "getSchedule"
 params["date"]    = startDate
 params["numdays"] = num_days
-
-#print(f'sched PARAMS (PIs for SEMIDs): {params}\n')
 
 wmko_sched_resp = requests.get(url, params=params, verify=False)
 if not wmko_sched_resp:
@@ -232,14 +228,10 @@ prog_codes.sort()
 
 # ----- objects viewer -----
 
-# ============
-#print(f'\n***** WMKO API: {len(prog_codes)} PI and Observers *****\n')
-
 #for prog_code in prog_codes:
 #    print(f'{prog_code}: {pi[prog_code]}, {observers[prog_code]}')   # wmko everything
 
 #print()
-
 #print(f'Admins ({len(admin)}):')
 #for adm in admin:
 #    print(f'{adm}: ')   # get full info from IPAC?
@@ -259,29 +251,25 @@ prog_codes.sort()
 #print(f'Observers Object: {observers}')
 #for k,v in observers.items():
 #    print(f'{k}: {v}')
-
 #print()
-# ============
 
 # ----- generate report -----
-
-# for each program, query the NExScI data access API to retrieve all accounts that have access 
-#print(f'***** NExScI API: Evaluating {len(prog_codes)} SEMIDs *****')
 
 print(f'Processing {len(prog_codes)} SEMIDs')
 #daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs')   # toggle for logger
 
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
 
+# API request for list of current admins
+admin_url = config['API']['ADMIN_URL']   # need IPAC users API?
+admin_params           = {}
+
 # API request for list of current Observers
-#obs_url = config['API']['SCHED_URL']
 obs_url = config['API']['OBS_URL']
-obs_params = {}
-obs_params["cmd"]       = "getObserverInfo"
+obs_params             = {}
 
 ipac_url = config['API']['IPAC_URL']
-ipac_params = {}
-ipac_params["request"] = "GET_USERS_WITH_ACCESS"
+ipac_params            = {}
 
 print('\n{')
 for prog_code in prog_codes:
@@ -289,6 +277,8 @@ for prog_code in prog_codes:
     ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
     #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
+    ipac_params = {}
+    ipac_params["request"] = "GET_USERS_WITH_ACCESS"
     ipac_params["semid"] = prog_code
     ipac_resp = requests.get(ipac_url, params=ipac_params, auth=(config['ipac']['user'],config['ipac']['pwd']))
     ipac_resp = ipac_resp.json()
@@ -298,10 +288,6 @@ for prog_code in prog_codes:
         #print(ipac_obj["userid"], ipac_obj["email"], ipac_obj["keckid"], ipac_obj["first"], ipac_obj["last"])
         #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
         ipac_users.add(ipac_obj["email"].split("@")[0])
-
-    #print(f'   IPAC Users    : {ipac_users}')
-
-    #print(f"   WMKO PI       : {pi[prog_code]}")
 
     pi_rec    = pi[prog_code].split(",")
     pi_email  = pi_rec[0].strip()
@@ -316,14 +302,28 @@ for prog_code in prog_codes:
         print(f"        {{'{prog_code}', 'ok', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}},")
 
     # need additional admin info from IPAC database
-    #print(f"   WMKO Admins   : {admin}")
-    for adm in admin:
+    for adm in admins:
+        #print(f'adm is {adm}')
+        admin_params = {}
+        admin_params["cmd"]   = "getObserverInfo"
+        admin_params["last"]  = adm
+        wmko_adm_resp = requests.get(admin_url, params=admin_params, verify=False)
+        wmko_adm_resp = wmko_adm_resp.json()
+
+        if wmko_adm_resp:
+            admin_lname = wmko_adm_resp["LastName"]
+            admin_fname = wmko_adm_resp["FirstName"]
+            admin_email = wmko_adm_resp["Email"]
+            admin_id    = wmko_adm_resp["Id"]
+            admin_user  = wmko_adm_resp["username"]
+
         if adm not in ipac_users:
             print(f"        {{'{prog_code}', 'required', 'admin', None, None, None, '{adm}', None}},")
+            #print(f"        {{'{prog_code}', 'required', 'observer', '{admin_fname}', '{admin_lname}', '{admin_email}', '{admin_user}', '{admin_id}'}},")
         else:
             print(f"        {{'{prog_code}', 'ok', 'admin', None, None, None, '{adm}', None}},")
+            #print(f"        {{'{prog_code}', 'ok', 'observer', '{admin_fname}', '{admin_lname}', '{admin_email}', '{admin_user}', '{admin_id}'}},")
 
-    #print(f"   WMKO SAs      : {sa}")
     for a_sa in sa:
         sa_fname  = sa_obj[a_sa]['firstname']
         sa_lname  = sa_obj[a_sa]['lastname']
@@ -336,14 +336,15 @@ for prog_code in prog_codes:
         else:
             print(f"        {{'{prog_code}', 'ok', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}},")
 
-    # need additional observer info from IPAC database
     if vtype == 'PI_OBS':
-        #print(f"   WMKO Observers: {observers[prog_code]}")
 
         for obs_lname in observers[prog_code]:
+            obs_params = {}
+            obs_params["cmd"]   = "getObserverInfo"
             obs_params["last"]  = obs_lname
             wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
             wmko_obs_resp = wmko_obs_resp.json()
+
             for item in wmko_obs_resp:
                 #print(f'item is {item}')
                 obs_lname = item["LastName"]

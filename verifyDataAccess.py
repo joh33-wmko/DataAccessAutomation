@@ -42,6 +42,8 @@ import argparse
 import calendar as cal
 from datetime import datetime as dt, timedelta
 from dateutil.relativedelta import relativedelta
+from email.mime.text import MIMEText
+import smtplib
 
 import json
 import requests
@@ -82,7 +84,11 @@ filename = f'{dirname}/{configFile}'
 assert os.path.isfile(filename), f"ERROR: {filename} file missing"
 with open(filename) as f: config = yaml.safe_load(f)
 
+message = ''
+#message = ''.join((message, id.zfill(4), '  '))
+
 print(f'\nKOA DATA ACCESS AUTOMATION (DAA) REPORT')
+message = ''.join((message, '\nKOA DATA ACCESS AUTOMATION (DAA) REPORT'))
 
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Verify Data Access")
@@ -94,22 +100,27 @@ vtype = args.vtype
 if vtype.upper() == 'PI':
     vtype = 'PI'
     print(f'\nProcessing PI Verification for')
+    message = ''.join((message, '\nProcessing PI Verification for'))
     #daalogger.info('Running PI Verification Report')   # toggle for logger
 if vtype.upper() == 'PI_OBS':
     vtype = 'PI_OBS'
     print(f'\nProcessing PI & Observer Verification for')
+    message = ''.join((message, '\nProcessing PI & Observer Verification for'))
     #daalogger.info('Running PI_OBS Verification Report')   # toggle for logger
 #if vtype.upper() == 'COI_OBS':
 #    vtype = 'COI_OBS'
 #    daalogger.info('Running COI_OBS Verification Report')   # toggle for logger
 #    print(f'\nProcessing COI & Observer Verification for')
+#    message = ''.join((message, '\nProcessing COI & Observer Verification for'))
 #if vtype.upper() == 'TDA':   # ToO or TWI
 #    vtype = 'TDA'
 #    print(f'\nProcessing TDA (ToO or Twilight) Verification for')
+#    message = ''.join((message, '\nProcessing TDA (ToO or Twilight) Verification for'))
 #    daalogger.info('Running TDA (ToO/TWI) Verification Report')   # toggle for logger
 #if vtype.upper() == 'KPF':
 #    vtype = 'KPF'
 #    print(f'\nProcessing KPF Verification for')
+#    message = ''.join((message, '\nProcessing KPF Verification for'))
 #    daalogger.info('Running KPF Verification Report')   # toggle for logger
 
 
@@ -128,14 +139,17 @@ else:
     run_year = int(run_date[0])
     run_month = int(run_date[1])
     run_day = 1
-    num_days = cal.monthrange(run_year, run_month)[1]
+    #num_days = cal.monthrange(run_year, run_month)[1]
+    num_days = 3
     startDate = f'{run_year}-{run_month}-{run_day}'
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
     startDate = dt.strftime(startDate, '%Y-%m-%d')
     endDate = dt.strftime(endDate, '%Y-%m-%d')
 
-print(f'{startDate} to {endDate} ({num_days} days)\n')
+date_range = f'{startDate} to {endDate} ({num_days} days)\n'
+print(date_range)
+message = ''.join((message, date_range, '\n'))
 #daalogger.info('Running KOA DAA for {startDate} to {endDate} ({num_days} days')   # toggle logger
 
 # initializations
@@ -164,6 +178,7 @@ params["role"]    = "SA"
 wmko_emp_resp = requests.get(url, params=params, verify=False)
 if not wmko_emp_resp:
     print('NO DATA RESPONSE')
+    message = ''.join((message, 'NO DATA RESPONSE'))
     sys.exit()
 else:
     wmko_emp_data = wmko_emp_resp.json()
@@ -195,6 +210,7 @@ params["numdays"] = num_days
 wmko_sched_resp = requests.get(url, params=params, verify=False)
 if not wmko_sched_resp:
     print('NO DATA RESPONSE')
+    message = ''.join((message, 'NO DATA RESPONSE'))
     sys.exit()
 else:
     wmko_sched_data = wmko_sched_resp.json()
@@ -256,9 +272,11 @@ prog_codes.sort()
 # ----- generate report -----
 
 print(f'Processing {len(prog_codes)} SEMIDs')
+message = ''.join((message, f'Processing {len(prog_codes)} SEMIDs\n'))
 #daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs')   # toggle for logger
 
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
+message = ''.join((message, '{semid, access, type, firstname, lastname, email, alias, keckid}\n'))
 
 # API request for list of current admins
 admin_url = config['API']['ADMIN_URL']   # need IPAC users API?
@@ -272,8 +290,10 @@ ipac_url = config['API']['IPAC_URL']
 ipac_params            = {}
 
 print('\n{')
+message = ''.join((message, '\n{\n'))
 for prog_code in prog_codes:
-    print(f'    \'{prog_code}\': {{')
+    print(f'    \"{prog_code}\": [')
+    message = ''.join((message, f'    \"{prog_code}\": [\n'))
     ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
     #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
@@ -297,9 +317,11 @@ for prog_code in prog_codes:
     pi_keckid = pi_rec[4].strip()
 
     if pi_alias not in ipac_users:
-        print(f"        {{'{prog_code}', 'required', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}},")
+        print(f'        ["{prog_code}", "required", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}],')
+        message = ''.join((message, f'        ["{prog_code}", "required", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}], \n'))
     else:
-        print(f"        {{'{prog_code}', 'ok', 'pi', '{pi_fname}', '{pi_lname}', '{pi_email}', '{pi_alias}', {pi_keckid}}},")
+        print(f'        ["{prog_code}", "ok", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}],')
+        message = ''.join((message, f'        ["{prog_code}", "ok", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}], \n'))
 
     # need additional admin info from IPAC database
     for adm in admins:
@@ -318,11 +340,13 @@ for prog_code in prog_codes:
             admin_user  = wmko_adm_resp["username"]
 
         if adm not in ipac_users:
-            print(f"        {{'{prog_code}', 'required', 'admin', None, None, None, '{adm}', None}},")
-            #print(f"        {{'{prog_code}', 'required', 'observer', '{admin_fname}', '{admin_lname}', '{admin_email}', '{admin_user}', '{admin_id}'}},")
+            print(f'        ["{prog_code}", "required", "admin", "", "", "", "{adm}", ""],')
+            #print(f'        ["{prog_code}", "required", "observer", "{admin_fname}", "{admin_lname}", "{admin_email}", "{admin_user}", {admin_id}],')
+            message = ''.join((message, f'        ["{prog_code}", "required", "admin", "", "", "", "{adm}", ""], \n'))
         else:
-            print(f"        {{'{prog_code}', 'ok', 'admin', None, None, None, '{adm}', None}},")
-            #print(f"        {{'{prog_code}', 'ok', 'observer', '{admin_fname}', '{admin_lname}', '{admin_email}', '{admin_user}', '{admin_id}'}},")
+            print(f'        ["{prog_code}", "ok", "admin", "", "", "", "{adm}", ""],')
+            #print(f'        ["{prog_code}", "ok", "observer", "{admin_fname}", "{admin_lname}", "{admin_email}", "{admin_user}", {admin_id}],')
+            message = ''.join((message, f'        ["{prog_code}", "ok", "admin", "", "", "", "{adm}", ""], \n'))
 
     for a_sa in sa:
         sa_fname  = sa_obj[a_sa]['firstname']
@@ -332,9 +356,11 @@ for prog_code in prog_codes:
         sa_keckid = sa_obj[a_sa]['keckid']
 
         if a_sa not in ipac_users:
-            print(f"        {{'{prog_code}', 'required', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}},")
+            print(f'        ["{prog_code}", "required", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}],')
+            message = ''.join((message, f'        ["{prog_code}", "required", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}], \n'))
         else:
-            print(f"        {{'{prog_code}', 'ok', 'sa', '{sa_fname}', '{sa_lname}', '{sa_addr}', '{sa_koaid}', {sa_keckid}}},")
+            print(f'        ["{prog_code}", "ok", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}],')
+            message = ''.join((message, f'        ["{prog_code}", "ok", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}], \n'))
 
     if vtype == 'PI_OBS':
 
@@ -354,18 +380,28 @@ for prog_code in prog_codes:
                 obs_user  = item["username"]
 
             if obs_user not in ipac_users:
-                print(f"        {{'{prog_code}', 'required', 'observer', '{obs_fname}', '{obs_lname}', '{obs_email}', '{obs_user}', '{obs_id}'}},")
+                print(f'        ["{prog_code}", "required", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}],')
+                message = ''.join((message, f'        ["{prog_code}", "required", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}], \n'))
             else:
-                print(f"        {{'{prog_code}', 'ok', 'observer', '{obs_fname}', '{obs_lname}', '{obs_email}', '{obs_user}', '{obs_id}'}},")
-    print('    },')
+                print(f'        ["{prog_code}", "ok", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}],')
+                message = ''.join((message, f'        ["{prog_code}", "ok", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}], \n'))
+    print('    ],')
+    message = ''.join((message, '    ],\n'))
 
 print('}')
+message = ''.join((message, '}\n'))
 print()
+message = ''.join((message, '\n'))
 
-# def construct email(s)
-
-# def send email(s)
-# - Send an email summary to the KOA helpdesk with information for those programs that need their access updated 
-
+# send an email summary to the KOA helpdesk with information for those programs that need their access updated 
+msg = MIMEText(message)
+msg['Subject'] = ''.join(('KOA Data Access Automation: ', vtype, 'Verification Report for ', startDate, ' - ', endDate))
+#msg['To'] = 'jhayashi@keck.hawaii.edu,jmader@keck.hawaii.edu'
+msg['To'] = 'jhayashi@keck.hawaii.edu'
+#msg['Bcc'] = 'jhayashi@keck.hawaii.edu'
+msg['From'] = 'koaadmin@keck.hawaii.edu'
+s = smtplib.SMTP('localhost')
+s.send_message(msg)
+s.quit()
 
 #daalogger.info('KOA Data Access Automation Finished')   # toggle for logger

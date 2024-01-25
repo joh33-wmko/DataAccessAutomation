@@ -16,13 +16,12 @@
 
 # ToDo's
 # - logger messages without kpython3
-# - readable vs minified version
-# - email send output, and to koaadmin at IPAC: ______
+# - send output to koaadmin at IPAC: ______
+# - IPAC admins missing data - pending IPAC API users access
 # - replace "set()" with None for output objects (ipac_users, etc.)
 # - clean up imports (PEP8)
 # - defs for request params and object displays?
 # - case treatment of vtypes
-# - IPAC admins missing data - pending IPAC API users access
 # - [DONE] args PI vs PI_OBS
 # - [DONE] fix too many values for Observers output
 # - [DONE] output {} in f-string expressions
@@ -36,6 +35,8 @@
 # - [DONE] results for observers now includes email addresses
 # - [INFO] keck alias/ipac username is first initial + last name
 # - [INFO] ipac calls keck id koaid
+# - [DONE] email send output
+# - [DONE] readable vs minified version - chenged None to "" so json readable for future API
 
 # daa imports
 import argparse
@@ -139,8 +140,7 @@ else:
     run_year = int(run_date[0])
     run_month = int(run_date[1])
     run_day = 1
-    #num_days = cal.monthrange(run_year, run_month)[1]
-    num_days = 3
+    num_days = cal.monthrange(run_year, run_month)[1]
     startDate = f'{run_year}-{run_month}-{run_day}'
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
@@ -390,10 +390,13 @@ for prog_code in prog_codes:
 
 print('}')
 message = ''.join((message, '}\n'))
+
 print()
 message = ''.join((message, '\n'))
 
-# send an email summary to the KOA helpdesk with information for those programs that need their access updated 
+# ----- send report via email -----
+# send an email python object to the KOA helpdesk users (and respective info) which require access
+
 msg = MIMEText(message)
 msg['Subject'] = ''.join(('KOA Data Access Automation: ', vtype, 'Verification Report for ', startDate, ' - ', endDate))
 #msg['To'] = 'jhayashi@keck.hawaii.edu,jmader@keck.hawaii.edu'

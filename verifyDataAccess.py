@@ -15,10 +15,12 @@
 # - KPF               : KPF Program Verification (SEM 2024B Aug 1, 2024)
 
 # ToDo's
+# - change output to dict of list of dicts with keys (IPAC request)
 # - logger messages without kpython3
 # - send output to koaadmin at IPAC: ______
 # - IPAC admins missing data - pending IPAC API users access
 # - replace "set()" with None for output objects (ipac_users, etc.)
+# - make json friendly by removing final commas in the output lists
 # - calculate last Mon of current month >= 7 days before next month
 # - clean up imports (PEP8)
 # - defs for request params and object displays?
@@ -131,6 +133,7 @@ if not args.date:
     run_year = next_month.year
     run_month = next_month.month
     num_days = cal.monthrange(run_year, run_month)[1]
+    #num_days = 3
     startDate = f'{run_year}-{run_month}-1'
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
@@ -142,6 +145,7 @@ else:
     run_month = int(run_date[1])
     run_day = 1
     num_days = cal.monthrange(run_year, run_month)[1]
+    #num_days = 3
     startDate = f'{run_year}-{run_month}-{run_day}'
     startDate = dt.strptime(startDate, '%Y-%m-%d')
     endDate = startDate + timedelta(days=num_days-1)
@@ -277,7 +281,7 @@ message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 #daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
 
 print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
-message = ''.join((message, '{semid, access, type, firstname, lastname, email, alias, keckid}\n'))
+message = ''.join((message, '{semid, status, usertype, firstname, lastname, email, alias, keckid}\n'))
 
 # API request for list of current admins
 admin_url = config['API']['ADMIN_URL']   # need IPAC users API?
@@ -318,11 +322,11 @@ for prog_code in prog_codes:
     pi_keckid = pi_rec[4].strip()
 
     if pi_alias not in ipac_users:
-        print(f'        ["{prog_code}", "required", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}],')
-        message = ''.join((message, f'        ["{prog_code}", "required", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}], \n'))
+        print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}},')
+        message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}}, \n'))
     else:
-        print(f'        ["{prog_code}", "ok", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}],')
-        message = ''.join((message, f'        ["{prog_code}", "ok", "pi", "{pi_fname}", "{pi_lname}", "{pi_email}", "{pi_alias}", {pi_keckid}], \n'))
+        print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}},')
+        message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}}, \n'))
 
     # need additional admin info from IPAC database
     for adm in admins:
@@ -341,13 +345,12 @@ for prog_code in prog_codes:
             admin_user  = wmko_adm_resp["username"]
 
         if adm not in ipac_users:
-            print(f'        ["{prog_code}", "required", "admin", "", "", "", "{adm}", ""],')
-            #print(f'        ["{prog_code}", "required", "observer", "{admin_fname}", "{admin_lname}", "{admin_email}", "{admin_user}", {admin_id}],')
-            message = ''.join((message, f'        ["{prog_code}", "required", "admin", "", "", "", "{adm}", ""], \n'))
+            #print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{admin_fname}", "lastname":"{admin_lname}", "email":"{admin_email}", "alias":"{admin_user}", "keckid":{admin_id}}},')
+            print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}},')
+            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}}, \n'))
         else:
-            print(f'        ["{prog_code}", "ok", "admin", "", "", "", "{adm}", ""],')
-            #print(f'        ["{prog_code}", "ok", "observer", "{admin_fname}", "{admin_lname}", "{admin_email}", "{admin_user}", {admin_id}],')
-            message = ''.join((message, f'        ["{prog_code}", "ok", "admin", "", "", "", "{adm}", ""], \n'))
+            print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}},')
+            message = ''.join((message, f'        {{"semis":"{prog_code}", "access":"granted", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}}, \n'))
 
     for a_sa in sa:
         sa_fname  = sa_obj[a_sa]['firstname']
@@ -357,11 +360,11 @@ for prog_code in prog_codes:
         sa_keckid = sa_obj[a_sa]['keckid']
 
         if a_sa not in ipac_users:
-            print(f'        ["{prog_code}", "required", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}],')
-            message = ''.join((message, f'        ["{prog_code}", "required", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}], \n'))
+            print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}},')
+            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}}, \n'))
         else:
-            print(f'        ["{prog_code}", "ok", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}],')
-            message = ''.join((message, f'        ["{prog_code}", "ok", "sa", "{sa_fname}", "{sa_lname}", "{sa_addr}", "{sa_koaid}", {sa_keckid}], \n'))
+            print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}},')
+            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}}, \n'))
 
     if vtype == 'PI_OBS':
 
@@ -381,11 +384,11 @@ for prog_code in prog_codes:
                 obs_user  = item["username"]
 
             if obs_user not in ipac_users:
-                print(f'        ["{prog_code}", "required", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}],')
-                message = ''.join((message, f'        ["{prog_code}", "required", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}], \n'))
+                print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}},')
+                message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}}, \n'))
             else:
-                print(f'        ["{prog_code}", "ok", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}],')
-                message = ''.join((message, f'        ["{prog_code}", "ok", "observer", "{obs_fname}", "{obs_lname}", "{obs_email}", "{obs_user}", {obs_id}], \n'))
+                print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}},')
+                message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}}, \n'))
     print('    ],')
     message = ''.join((message, '    ],\n'))
 
@@ -397,6 +400,7 @@ message = ''.join((message, '\n'))
 
 # ----- send report via email -----
 # send an email python object to the KOA helpdesk users (and respective info) which require access
+# output report is a python object. to make json friendly, remove final commas from lists
 
 msg = MIMEText(message)
 msg['Subject'] = ''.join(('KOA Data Access Automation: ', vtype, 'Verification Report for ', startDate, ' - ', endDate))

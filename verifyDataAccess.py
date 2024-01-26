@@ -152,9 +152,9 @@ else:
     startDate = dt.strftime(startDate, '%Y-%m-%d')
     endDate = dt.strftime(endDate, '%Y-%m-%d')
 
-date_range = f'{startDate} to {endDate} ({num_days} days)\n'
+date_range = f'{startDate} to {endDate} ({num_days} days) '
 print(date_range)
-message = ''.join((message, date_range, '\n'))
+message = ''.join((message, date_range, "\n"))
 #daalogger.info('Running KOA DAA for {startDate} to {endDate} ({num_days} days')   # toggle logger
 
 # initializations
@@ -280,8 +280,8 @@ print(f'{len(prog_codes)} SEMIDs found')
 message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 #daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
 
-print('{semid, access, type, firstname, lastname, email, alias, keckid}')   # legend for recipient
-message = ''.join((message, '{semid, status, usertype, firstname, lastname, email, alias, keckid}\n'))
+#print('{semid, access, usertype, firstname, lastname, email, alias, keckid}')   # legend for recipient
+#message = ''.join((message, '{semid, access, usertype, firstname, lastname, email, alias, keckid}\n'))
 
 # API request for list of current admins
 admin_url = config['API']['ADMIN_URL']   # need IPAC users API?
@@ -404,8 +404,8 @@ message = ''.join((message, '\n'))
 
 msg = MIMEText(message)
 msg['Subject'] = ''.join(('KOA Data Access Automation: ', vtype, 'Verification Report for ', startDate, ' - ', endDate))
-#msg['To'] = 'jhayashi@keck.hawaii.edu,jmader@keck.hawaii.edu'
-msg['To'] = 'jhayashi@keck.hawaii.edu'
+msg['To'] = 'jhayashi@keck.hawaii.edu,jmader@keck.hawaii.edu'
+#msg['To'] = 'jhayashi@keck.hawaii.edu'
 #msg['Bcc'] = 'jhayashi@keck.hawaii.edu'
 msg['From'] = 'koaadmin@keck.hawaii.edu'
 s = smtplib.SMTP('localhost')

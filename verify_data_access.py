@@ -96,18 +96,16 @@ endDate   = dt.strftime(endDate, '%Y-%m-%d')
 date_range = f'{startDate} to {endDate} ({numdays} day(s)) '
 message = ''.join((message, date_range, "\n"))
 
-# call API on the startDate and numdays
-output = {}
-
 # ----- create data objects: WMKO SAs -----
+# Call APIs on the startDate and numdays
 # API request for list of current SAs - will only change for new and departing SAs
 
-url = config['API']['EMP_URL']
-sa_params            = {}
-sa_params["cmd"]     = "getEmployee"
-sa_params["role"]    = "SA"
+emp_url             = config['API']['EMP_URL']
+emp_params          = {}
+emp_params["cmd"]   = "getEmployee"
+emp_params["role"]  = "SA"
 
-wmko_emp_resp = requests.get(url, params=sa_params, verify=False)
+wmko_emp_resp = requests.get(emp_url, params=emp_params, verify=False)
 if not wmko_emp_resp:
     print('NO DATA RESPONSE')
     message = ''.join((message, 'NO DATA RESPONSE'))
@@ -118,6 +116,7 @@ else:
 #for sa_item in wmko_emp_data:
     #print(sa_item)
 
+# API request for list of current Observers
 obs_url = config['API']['SCHED_URL']
 sa_obj = {}
 sa_list = []
@@ -195,174 +194,141 @@ for entry in wmko_sched_data:
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
-## ----- generate report -----
-#
+# ----- generate report -----
+
 #print(f'{len(prog_codes)} SEMIDs found')
-#message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
+message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 ##daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
-#
-##print('{semid, access, usertype, firstname, lastname, email, alias, keckid}')   # legend for recipient
-##message = ''.join((message, '{semid, access, usertype, firstname, lastname, email, alias, keckid}\n'))
-#
-## API request for list of current admins
-##admin_url = config['API']['ADMIN_URL']   # need IPAC users API?
-#admin_params           = {}
-#
-## API request for list of current Observers
-#obs_url = config['API']['SCHED_URL']
-#obs_params             = {}
-#
-#ipac_url = config['API']['IPAC_URL']
-#ipac_params            = {}
-#
-###print('\n{')
-#message = ''.join((message, '\n{\n'))
 
-#for prog_code in prog_codes:
+
+admins = ['koaadmin', 'hireseng']
+output = {}
+
+ipac_url = config['API']['IPAC_URL']
+
+for prog_code in prog_codes:
 #    print(prog_code)
-#    output[prog_code] = []
-#    ##print(f'    \"{prog_code}\": [')
-#    message = ''.join((message, f'    \"{prog_code}\": [\n'))
-#    ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
-#    #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
-#
-#    ipac_params = {}
-#    ipac_params["request"] = "GET_USERS_WITH_ACCESS"
-#    ipac_params["semid"] = prog_code
-#    ipac_resp = requests.get(ipac_url, params=ipac_params, auth=(config['ipac']['user'],config['ipac']['pwd']))
-#    ipac_resp = ipac_resp.json()
-#
-#    ipac_users = set()
-#    for ipac_obj in ipac_resp["response"]["detail"]:
-#        #print(ipac_obj["userid"], ipac_obj["email"], ipac_obj["keckid"], ipac_obj["first"], ipac_obj["last"])
-#        #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
-#        ipac_users.add(ipac_obj["email"].split("@")[0])
-#
-#    pi_rec    = pi[prog_code].split(",")
-#    pi_email  = pi_rec[0].strip()
-#    pi_lname  = pi_rec[1].strip()
-#    pi_fname  = pi_rec[2].strip()
-#    pi_alias  = pi_rec[3].strip()
-#    pi_keckid = pi_rec[4].strip()
-#
-#    new = {}
-#    new["semid"] = prog_code
-#    new["usertype"] = "pi"
-#    new["firstname"] = pi_fname
-#    new["lastname"] = pi_lname
-#    new["email"] = pi_email
-#    new["alias"] = ""
-#    new["keckid"] = pi_keckid
-#    new["access"] = "required" if pi_alias not in ipac_users else "granted"
-#    output[prog_code].append(new)
-#
-##    if pi_alias not in ipac_users:
-##        print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}},')
-##        message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}}, \n'))
-##    else:
-##        print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}},')
-##        message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"pi", "firstname":"{pi_fname}", "lastname":"{pi_lname}", "email":"{pi_email}", "alias":"{pi_alias}", "keckid":{pi_keckid}}}, \n'))
-#
-#    # need additional admin info from IPAC database
-#    for adm in admins:
-#        #print(f'adm is {adm}')
-##        admin_params = {}
-##        admin_params["cmd"]   = "getObserverInfo"
-##        admin_params["last"]  = adm
-##        wmko_adm_resp = requests.get(admin_url, params=admin_params, verify=False)
-##        wmko_adm_resp = wmko_adm_resp.json()
-#
-##        if wmko_adm_resp:
-##            admin_lname = wmko_adm_resp["LastName"]
-##            admin_fname = wmko_adm_resp["FirstName"]
-##            admin_email = wmko_adm_resp["Email"]
-##            admin_id    = wmko_adm_resp["Id"]
-##            admin_user  = wmko_adm_resp["username"]
-#
-#        new = {}
-#        new["semid"] = prog_code
-#        new["usertype"] = "admin"
-#        new["firstname"] = ""
-#        new["lastname"] = ""
-#        new["email"] = ""
-#        new["alias"] = adm
-#        new["keckid"] = 0
-#        new["access"] = "required" if adm not in ipac_users else "granted"
-#        output[prog_code].append(new)
-#    
-##        if adm not in ipac_users:
-##            #print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{admin_fname}", "lastname":"{admin_lname}", "email":"{admin_email}", "alias":"{admin_user}", "keckid":{admin_id}}},')
-##            print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}},')
-##            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}}, \n'))
-##        else:
-##            print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}},')
-##            message = ''.join((message, f'        {{"semis":"{prog_code}", "access":"granted", "usertype":"admin", "firstname":"", "lastname":"", "email":"", "alias":"{adm}", "keckid":0}}, \n'))
-#
-    #for a_sa in sa_list:
-    #    print(a_sa)
-#        sa_fname  = sa_obj[a_sa]['firstname']
-#        sa_lname  = sa_obj[a_sa]['lastname']
-#        sa_addr   = sa_obj[a_sa]['email']
-#        sa_koaid  = sa_obj[a_sa]['alias']
-#        sa_keckid = sa_obj[a_sa]['keckid']
-#
-#        new = {}
-#        new["semid"] = prog_code
-#        new["usertype"] = "sa"
-#        new["firstname"] = sa_fname
-#        new["lastname"] = sa_lname
-#        new["email"] = sa_addr
-#        new["alias"] = ""
-#        new["keckid"] = sa_keckid
-#        new["access"] = "required" if a_sa not in ipac_users else "granted"
-#        output[prog_code].append(new)
-    
-##        if a_sa not in ipac_users:
-##            print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}},')
-##            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}}, \n'))
-##        else:
-##            print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}},')
-##            message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"sa", "firstname":"{sa_fname}", "lastname":"{sa_lname}", "email":"{sa_addr}", "alias":"{sa_koaid}", "keckid":{sa_keckid}}}, \n'))
-#
-#    if vtype == 'PI_OBS':
-#
-#        for obs_lname in observers[prog_code]:
-#            obs_params = {}
-#            obs_params["cmd"]   = "getObserverInfo"
-#            obs_params["last"]  = obs_lname
-#            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
-#            wmko_obs_resp = wmko_obs_resp.json()
-#
-#            for item in wmko_obs_resp:
-#                #print(f'item is {item}')
-#                obs_lname = item["LastName"]
-#                obs_fname = item["FirstName"]
-#                obs_email = item["Email"]
-#                obs_id    = item["Id"]
-#                obs_user  = item["username"]
-#
-#            if obs_user not in ipac_users:
-#                print(f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}},')
-#                message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"required", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}}, \n'))
-#            else:
-#                print(f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}},')
-#                message = ''.join((message, f'        {{"semid":"{prog_code}", "access":"granted", "usertype":"observer", "firstname":"{obs_fname}", "lastname":"{obs_lname}", "email":"{obs_email}", "alias":"{obs_user}", "keckid":{obs_id}}}, \n'))
-##    print('    ],')
-##    message = ''.join((message, '    ],\n'))
-#
-##print('}')
-##message = ''.join((message, '}\n'))
-#
-##print()
-##message = ''.join((message, '\n'))
+    output[prog_code] = []
+    ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
+    #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
-print(json.dumps(output, indent=2))
-#
+    ipac_params = {}
+    ipac_params["request"] = "GET_USERS_WITH_ACCESS"
+    ipac_params["semid"] = prog_code
+    ipac_resp = requests.get(ipac_url, params=ipac_params, auth=(config['ipac']['user'],config['ipac']['pwd']))
+    ipac_resp = ipac_resp.json()
+
+    ipac_users = set()
+    for ipac_obj in ipac_resp["response"]["detail"]:
+        #print(ipac_obj["userid"], ipac_obj["email"], ipac_obj["keckid"], ipac_obj["first"], ipac_obj["last"])
+        #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
+        ipac_users.add(ipac_obj["email"].split("@")[0])
+
+    pi_rec    = pi[prog_code].split(",")
+    pi_email  = pi_rec[0].strip()
+    pi_lname  = pi_rec[1].strip()
+    pi_fname  = pi_rec[2].strip()
+    pi_alias  = pi_rec[3].strip()
+    pi_keckid = pi_rec[4].strip()
+
+    new = {}
+    new["semid"] = prog_code
+    new["usertype"] = "pi"
+    new["firstname"] = pi_fname
+    new["lastname"] = pi_lname
+    new["email"] = pi_email
+    #new["alias"] = ""
+    new["alias"] = pi_alias
+    new["keckid"] = pi_keckid
+    new["access"] = "required" if pi_alias not in ipac_users else "granted"
+    output[prog_code].append(new)
+
+    # need additional admin info from IPAC database
+    # API request for list of current admins
+    # admin_url = config["API"]["IPAC_URL"]
+    for adm in admins:
+        #print(f'adm is {adm}')
+#        admin_params = {}
+#        admin_params["cmd"]   = "getUserInfo"
+#        admin_params["last"]  = adm
+#        wmko_adm_resp = requests.get(admin_url, params=admin_params, verify=False)
+#        wmko_adm_resp = wmko_adm_resp.json()
+
+#        if wmko_adm_resp:
+#            admin_lname = wmko_adm_resp["LastName"]
+#            admin_fname = wmko_adm_resp["FirstName"]
+#            admin_email = wmko_adm_resp["Email"]
+#            admin_id    = wmko_adm_resp["Id"]
+#            admin_user  = wmko_adm_resp["username"]
+
+        new = {}
+        new["semid"] = prog_code
+        new["usertype"] = "admin"
+        new["firstname"] = ""
+        new["lastname"] = ""
+        new["email"] = ""
+        new["alias"] = adm
+        new["keckid"] = 0
+        new["access"] = "required" if adm not in ipac_users else "granted"
+        output[prog_code].append(new)
+    
+    for sa in sa_list:
+        #print(sa)
+        sa_fname  = sa_obj[sa]['firstname']
+        sa_lname  = sa_obj[sa]['lastname']
+        sa_addr   = sa_obj[sa]['email']
+        sa_alias  = sa_obj[sa]['alias']
+        sa_keckid = sa_obj[sa]['keckid']
+
+        new = {}
+        new["semid"] = prog_code
+        new["usertype"] = "sa"
+        new["firstname"] = sa_fname
+        new["lastname"] = sa_lname
+        new["email"] = sa_addr
+        new["alias"] = sa_alias
+        new["keckid"] = sa_keckid
+        new["access"] = "required" if sa not in ipac_users else "granted"
+        output[prog_code].append(new)
+
+    for obs_lname in observers[prog_code]:
+        obs_params = {}
+        obs_params["cmd"]   = "getObserverInfo"
+        obs_params["last"]  = obs_lname
+        wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
+        wmko_obs_resp = wmko_obs_resp.json()
+
+        for item in wmko_obs_resp:
+            #print(f'item is {item}')
+            obs_fname = item["FirstName"]
+            obs_lname = item["LastName"]
+            obs_email = item["Email"]
+            obs_id    = item["Id"]
+            obs_user  = item["username"]
+
+            new = {}
+            new["semid"] = prog_code
+            new["usertype"] = "observer"
+            new["firstname"] = obs_fname
+            new["lastname"] = obs_lname
+            new["email"] = obs_email
+            #new["alias"] = ""
+            #new["username"] = obs_user
+            new["alias"] = obs_user
+            new["keckid"] = obs_id
+            new["access"] = "required" if obs_user not in ipac_users else "granted"
+            output[prog_code].append(new)
+
+json_output = json.dumps(output, indent=2)
+print(json_output)
+
 # ----- send report via email -----
 # send an email python object to the KOA helpdesk users (and respective info) which require access
 # output report is a python object. to make json friendly, remove final commas from lists
 
 message = ''.join((message, "\n"))
+
+final_output = ''.join((message, json_output))
 
 #sendReport = False
 # if ...
@@ -370,5 +336,5 @@ sendReport = True
 #...
 
 if (sendReport and email):
-    send_email(message, error)
-else: print(message, error)
+    send_email(final_output, error)
+else: print(final_output, error)

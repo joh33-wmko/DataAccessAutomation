@@ -200,22 +200,24 @@ prog_codes.sort()
 
 # ----- create data object for WMKO KoaAccess and KpfAccess - TEST DEV - taking detour to optimize API calls in other use cases -----
 
-#prog_code = '2023B_U048'
-#prop_url             = config['API']['PROP_URL']
-#prop_params          = {}
+prop_url             = config['API']['PROP_URL']
+prop_params          = {}
 #prop_params["cmd"]   = "getCOIs"
 #prop_params["ktn"]   = prog_code 
-#
-#wmko_prop_resp = requests.get(prop_url, params=prop_params, verify=False)
-#if not wmko_prop_resp:
-#    print('NO DATA RESPONSE')
-#    message = ''.join((message, 'NO DATA RESPONSE'))
-#    sys.exit()
-#else:
-#    wmko_prop_data = wmko_prop_resp.json()
-#
-#for prop_item in wmko_prop_data:
-#    print(prop_item)
+#prop_params["KTN"]   = "2023B_U048"
+prop_params["ktn"]   = "2023B_U048"
+
+wmko_prop_resp = requests.get(prop_url, params=prop_params, verify=False)
+if not wmko_prop_resp:
+    print('NO DATA RESPONSE')
+    message = ''.join((message, 'NO DATA RESPONSE'))
+    sys.exit()
+else:
+    wmko_prop_data = wmko_prop_resp.json()
+
+print(f'WMKO PROP DATA: {wmko_prop_data}')
+for prop_item in wmko_prop_data:
+    print(f'prop_item: {prop_item}')
 
 
 # ----- generate report -----

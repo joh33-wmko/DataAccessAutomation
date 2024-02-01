@@ -14,6 +14,10 @@
 # -      $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29 --email jmader@keck.hawaii.edu
 # - Run with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
 
+# ToDos:
+# - KoaAccess
+# - KpfAccess
+# - make defs for "new" assignments
 
 # daa imports
 import argparse
@@ -147,15 +151,15 @@ for sa_item in wmko_emp_data:
 
     sa_obj[sa_alias] = sa_info
 
-# ----- generate PI and OBS objects from schedule API -----
+# ----- create PI and OBS objects from schedule API -----
 
-url = config['API']['SCHED_URL']
+sched_url = config['API']['SCHED_URL']
 sched_params = {}
 sched_params["cmd"]     = "getSchedule"
 sched_params["date"]    = startDate
 sched_params["numdays"] = numdays
 
-wmko_sched_resp = requests.get(url, params=sched_params, verify=False)
+wmko_sched_resp = requests.get(sched_url, params=sched_params, verify=False)
 if not wmko_sched_resp:
     print('NO DATA RESPONSE')
     message = ''.join((message, 'NO DATA RESPONSE'))
@@ -193,6 +197,26 @@ for entry in wmko_sched_data:
 
 prog_codes = list(prog_codes)
 prog_codes.sort()
+
+# ----- create data object for WMKO KoaAccess and KpfAccess - TEST DEV - taking detour to optimize API calls in other use cases -----
+
+#prog_code = '2023B_U048'
+#prop_url             = config['API']['PROP_URL']
+#prop_params          = {}
+#prop_params["cmd"]   = "getCOIs"
+#prop_params["ktn"]   = prog_code 
+#
+#wmko_prop_resp = requests.get(prop_url, params=prop_params, verify=False)
+#if not wmko_prop_resp:
+#    print('NO DATA RESPONSE')
+#    message = ''.join((message, 'NO DATA RESPONSE'))
+#    sys.exit()
+#else:
+#    wmko_prop_data = wmko_prop_resp.json()
+#
+#for prop_item in wmko_prop_data:
+#    print(prop_item)
+
 
 # ----- generate report -----
 
@@ -313,14 +337,14 @@ for prog_code in prog_codes:
             new["lastname"] = obs_lname
             new["email"] = obs_email
             #new["alias"] = ""
-            #new["username"] = obs_user
             new["alias"] = obs_user
+            #new["username"] = obs_user
             new["keckid"] = obs_id
             new["access"] = "required" if obs_user not in ipac_users else "granted"
             output[prog_code].append(new)
 
 json_output = json.dumps(output, indent=2)
-print(json_output)
+#print(json_output)
 
 # ----- send report via email -----
 # send an email python object to the KOA helpdesk users (and respective info) which require access

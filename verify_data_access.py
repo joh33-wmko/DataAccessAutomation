@@ -106,7 +106,6 @@ message = ''.join((message, date_range, "\n"))
 
 emp_url             = config['API']['EMP_URL']
 emp_params          = {}
-emp_params["cmd"]   = "getEmployee"
 emp_params["role"]  = "SA"
 
 wmko_emp_resp = requests.get(emp_url, params=emp_params, verify=False)
@@ -121,7 +120,7 @@ else:
     #print(sa_item)
 
 # API request for list of current Observers
-obs_url = config['API']['SCHED_URL']
+obs_url = config['API']['OBS_URL']
 sa_obj = {}
 sa_list = []
 for sa_item in wmko_emp_data:
@@ -140,7 +139,6 @@ for sa_item in wmko_emp_data:
     sa_info["keckid"] = 0 #sa_keckid
 
     obs_params = {}
-    obs_params["cmd"]    = "getObserverInfo"
     obs_params["last"]   = sa_lastname
     obs_params["first"]  = sa_firstname
     wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
@@ -155,7 +153,6 @@ for sa_item in wmko_emp_data:
 
 sched_url = config['API']['SCHED_URL']
 sched_params = {}
-sched_params["cmd"]     = "getSchedule"
 sched_params["date"]    = startDate
 sched_params["numdays"] = numdays
 
@@ -200,12 +197,11 @@ prog_codes.sort()
 
 # ----- create data object for WMKO KoaAccess and KpfAccess - TEST DEV - taking detour to optimize API calls in other use cases -----
 
+prog_code = "2023B_U048"   # remove test value
 prop_url             = config['API']['PROP_URL']
 prop_params          = {}
-#prop_params["cmd"]   = "getCOIs"
 #prop_params["ktn"]   = prog_code 
-#prop_params["KTN"]   = "2023B_U048"
-prop_params["ktn"]   = "2023B_U048"
+prop_params["ktn"]   =  "2023B_U048"   # remove test value
 
 wmko_prop_resp = requests.get(prop_url, params=prop_params, verify=False)
 if not wmko_prop_resp:
@@ -213,11 +209,39 @@ if not wmko_prop_resp:
     message = ''.join((message, 'NO DATA RESPONSE'))
     sys.exit()
 else:
-    wmko_prop_data = wmko_prop_resp.json()
+    wmko_prop_data = wmko_prop_resp.json()['data']['COIs']
 
 print(f'WMKO PROP DATA: {wmko_prop_data}')
+output = {}
+prop_item_list = {}
+
 for prop_item in wmko_prop_data:
-    print(f'prop_item: {prop_item}')
+    coi_semid  = prop_item['KTN']
+    coi_type   = prop_item['Type']
+    coi_fname  = prop_item['FirstName']
+    coi_lname  = prop_item['LastName']
+    coi_email  = prop_item['Email']
+    coi_alias  = prop_item['Email'].split('@')[0]
+    coi_keckid = prop_item['ObsId']
+    
+    new = {}
+    #new["semid"] = prog_code
+    new["semid"] = coi_semid
+    #new["usertype"] = "coi"
+    new["usertype"] = coi_type
+    new["firstname"] = coi_fname
+    new["lastname"] = coi_lname
+    new["email"] = coi_email
+    new["alias"] = coi_alias
+    new["keckid"] = coi_keckid
+    #new["access"] = "required" if pi_alias not in ipac_users else "granted"
+    new["access"] = "required"   # combine with observers
+
+    #output[prog_code].append(new)
+    output[prog_code] = new
+    prop_item_list[coi_semid] = new
+
+print(f'prop_item_list: {prop_item_list}')
 
 
 # ----- generate report -----
@@ -228,7 +252,7 @@ message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 
 
 admins = ['koaadmin', 'hireseng']
-output = {}
+#output = {}
 
 ipac_url = config['API']['IPAC_URL']
 
@@ -275,7 +299,6 @@ for prog_code in prog_codes:
     for adm in admins:
         #print(f'adm is {adm}')
 #        admin_params = {}
-#        admin_params["cmd"]   = "getUserInfo"
 #        admin_params["last"]  = adm
 #        wmko_adm_resp = requests.get(admin_url, params=admin_params, verify=False)
 #        wmko_adm_resp = wmko_adm_resp.json()
@@ -319,7 +342,6 @@ for prog_code in prog_codes:
 
     for obs_lname in observers[prog_code]:
         obs_params = {}
-        obs_params["cmd"]   = "getObserverInfo"
         obs_params["last"]  = obs_lname
         wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
         wmko_obs_resp = wmko_obs_resp.json()

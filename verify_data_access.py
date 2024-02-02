@@ -100,11 +100,20 @@ endDate   = dt.strftime(endDate, '%Y-%m-%d')
 date_range = f'{startDate} to {endDate} ({numdays} day(s)) '
 message = ''.join((message, date_range, "\n"))
 
+# ----- APIs ----- move to def calls
+
+emp_url   = config['API']['EMP_URL']     # for SAs
+sched_url = config['API']['SCHED_URL']   # for SEMIDs
+obs_url   = config['API']['OBS_URL']     # for Observers' info
+#admin_url = config["API"]["ADMIN_URL"]   # for user info
+coi_url  = config['API']['COI_URL']    # for for coversheet (COIs, KoaAccess, and KpfAccess)
+ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_ACCESS...
+
 # ----- create data objects: WMKO SAs -----
 # Call APIs on the startDate and numdays
 # API request for list of current SAs - will only change for new and departing SAs
 
-emp_url             = config['API']['EMP_URL']
+#emp_url             = config['API']['EMP_URL']
 emp_params          = {}
 emp_params["role"]  = "SA"
 
@@ -120,7 +129,7 @@ else:
     #print(sa_item)
 
 # API request for list of current Observers
-obs_url = config['API']['OBS_URL']
+#obs_url = config['API']['OBS_URL']
 sa_obj = {}
 sa_list = []
 for sa_item in wmko_emp_data:
@@ -151,7 +160,7 @@ for sa_item in wmko_emp_data:
 
 # ----- create PI and OBS objects from schedule API -----
 
-sched_url = config['API']['SCHED_URL']
+#sched_url = config['API']['SCHED_URL']
 sched_params = {}
 sched_params["date"]    = startDate
 sched_params["numdays"] = numdays
@@ -195,54 +204,7 @@ for entry in wmko_sched_data:
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
-# ----- create data object for WMKO KoaAccess and KpfAccess - TEST DEV - taking detour to optimize API calls in other use cases -----
-
-prog_code = "2023B_U048"   # remove test value
-prop_url             = config['API']['PROP_URL']
-prop_params          = {}
-#prop_params["ktn"]   = prog_code 
-prop_params["ktn"]   =  "2023B_U048"   # remove test value
-
-wmko_prop_resp = requests.get(prop_url, params=prop_params, verify=False)
-if not wmko_prop_resp:
-    print('NO DATA RESPONSE')
-    message = ''.join((message, 'NO DATA RESPONSE'))
-    sys.exit()
-else:
-    wmko_prop_data = wmko_prop_resp.json()['data']['COIs']
-
-print(f'WMKO PROP DATA: {wmko_prop_data}')
 output = {}
-prop_item_list = {}
-
-for prop_item in wmko_prop_data:
-    coi_semid  = prop_item['KTN']
-    coi_type   = prop_item['Type']
-    coi_fname  = prop_item['FirstName']
-    coi_lname  = prop_item['LastName']
-    coi_email  = prop_item['Email']
-    coi_alias  = prop_item['Email'].split('@')[0]
-    coi_keckid = prop_item['ObsId']
-    
-    new = {}
-    #new["semid"] = prog_code
-    new["semid"] = coi_semid
-    #new["usertype"] = "coi"
-    new["usertype"] = coi_type
-    new["firstname"] = coi_fname
-    new["lastname"] = coi_lname
-    new["email"] = coi_email
-    new["alias"] = coi_alias
-    new["keckid"] = coi_keckid
-    #new["access"] = "required" if pi_alias not in ipac_users else "granted"
-    new["access"] = "required"   # combine with observers
-
-    #output[prog_code].append(new)
-    output[prog_code] = new
-    prop_item_list[coi_semid] = new
-
-print(f'prop_item_list: {prop_item_list}')
-
 
 # ----- generate report -----
 
@@ -252,9 +214,9 @@ message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 
 
 admins = ['koaadmin', 'hireseng']
-#output = {}
+output = {}
 
-ipac_url = config['API']['IPAC_URL']
+#ipac_url = config['API']['IPAC_URL']
 
 for prog_code in prog_codes:
 #    print(prog_code)
@@ -366,6 +328,96 @@ for prog_code in prog_codes:
             new["keckid"] = obs_id
             new["access"] = "required" if obs_user not in ipac_users else "granted"
             output[prog_code].append(new)
+
+
+    # ----- WMKO COI -----
+
+    coi_params          = {}
+    coi_params["ktn"]   = prog_code
+    
+    wmko_coi_resp = requests.get(coi_url, params=coi_params, verify=False)
+    if not wmko_coi_resp:
+        print('NO DATA RESPONSE')
+        message = ''.join((message, 'NO DATA RESPONSE'))
+        sys.exit()
+    else:
+        wmko_coi_data = wmko_coi_resp.json()['data']['COIs']
+    
+    print(f'WMKO COI DATA: {wmko_coi_data}')
+    
+    for coi_item in wmko_coi_data:
+        coi_semid  = coi_item['KTN']
+        coi_type   = coi_item['Type']
+        coi_fname  = coi_item['FirstName']
+        coi_lname  = coi_item['LastName']
+        coi_email  = coi_item['Email']
+        coi_alias  = coi_item['Email'].split('@')[0]
+        coi_keckid = coi_item['ObsId']
+    
+        new = {}
+        new["semid"] = prog_code
+        #new["semid"] = coi_semid
+        #new["usertype"] = "coi"   # if both observer and coi, do not replicate
+        new["usertype"] = coi_type.lower()
+        new["firstname"] = coi_fname
+        new["lastname"] = coi_lname
+        new["email"] = coi_email
+        new["alias"] = coi_alias
+        new["keckid"] = coi_keckid
+        new["access"] = "required" if pi_alias not in ipac_users else "granted"
+        #new["access"] = "required"   # combine with observers
+        output[prog_code].append(new)
+
+
+
+
+    # ----- WMKO KoaAccess -----
+
+#    coi_params          = {}
+#    coi_params["ktn"]   = prog_code
+#    
+#    wmko_koa_resp = requests.get(coi_url, params=coi_params, verify=False)
+#    if not wmko_koa_resp:
+#        print('NO DATA RESPONSE')
+#        message = ''.join((message, 'NO DATA RESPONSE'))
+#        sys.exit()
+#    else:
+#        wmko_koa_data = wmko_koa_resp.json()['data']['COIs']
+#    
+#    print(f'WMKO KoaAccess Data: {wmko_koa_data}')
+#    
+#    for koa_item in wmko_koa_data:
+#        coi_semid  = prop_item['KTN']
+#        coi_type   = prop_item['Type']
+#        coi_fname  = prop_item['FirstName']
+#        coi_lname  = prop_item['LastName']
+#        coi_email  = prop_item['Email']
+#        coi_alias  = prop_item['Email'].split('@')[0]
+#        coi_keckid = prop_item['ObsId']
+#    
+#        new = {}
+#        new["semid"] = prog_code
+#        #new["semid"] = coi_semid
+#        #new["usertype"] = "coi"   # if both observer and coi, do not replicate
+#        new["usertype"] = coi_type.lower()
+#        new["firstname"] = coi_fname
+#        new["lastname"] = coi_lname
+#        new["email"] = coi_email
+#        new["alias"] = coi_alias
+#        new["keckid"] = coi_keckid
+#        new["access"] = "required" if pi_alias not in ipac_users else "granted"
+#        #new["access"] = "required"   # combine with observers
+#        output[prog_code].append(new)
+
+
+
+
+
+
+
+
+
+
 
 json_output = json.dumps(output, indent=2)
 #print(json_output)

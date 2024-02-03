@@ -27,6 +27,7 @@ import requests
 import smtplib
 import socket
 from socket import gethostname
+import sys
 from email.mime.text import MIMEText
 from datetime import datetime as dt, timedelta
 import urllib3
@@ -106,8 +107,10 @@ emp_url   = config['API']['EMP_URL']     # for SAs
 sched_url = config['API']['SCHED_URL']   # for SEMIDs
 obs_url   = config['API']['OBS_URL']     # for Observers' info
 #admin_url = config["API"]["ADMIN_URL"]   # for user info
-coi_url  = config['API']['COI_URL']    # for for coversheet (COIs, KoaAccess, and KpfAccess)
-ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_ACCESS...
+coi_url  = config['API']['COI_URL']      # for for coversheet COIs
+koa_url  = config['API']['KOA_URL']      # for for coversheet KoaAccess
+kpf_url  = config['API']['KPF_URL']      # for for coversheet KpfAccess
+ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_USERS_WITH_ACCESS
 
 # ----- create data objects: WMKO SAs -----
 # Call APIs on the startDate and numdays
@@ -224,6 +227,7 @@ for prog_code in prog_codes:
     ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
     #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
 
+    # ----- IPAC User Access List -----
     ipac_params = {}
     ipac_params["request"] = "GET_USERS_WITH_ACCESS"
     ipac_params["semid"] = prog_code
@@ -236,6 +240,46 @@ for prog_code in prog_codes:
         #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
         ipac_users.add(ipac_obj["email"].split("@")[0])
 
+    # ----- WMKO KoaAccess -----
+
+    koa_params          = {}
+    koa_params["ktn"]   = prog_code
+    
+    wmko_koa_resp = requests.get(koa_url, params=koa_params, verify=False)
+    if not wmko_koa_resp:
+        print('NO DATA RESPONSE')
+        message = ''.join((message, 'NO DATA RESPONSE'))
+        koa_access = None
+        sys.exit()
+    else:
+        koa_access = wmko_koa_resp.json()['KoaAccess']
+        koa_pair = f'"KoaAccess": {koa_access}'
+
+    #print(f'*** {prog_code} WMKO KoaAccess Data: {koa_access} ***')
+    #output[prog_code].append(koa_pair)
+
+
+    # ----- WMKO KpfAccess [TBD 2024B Aug 2024] -----
+
+    kpf_params          = {}
+    kpf_params["ktn"]   = prog_code
+    
+    wmko_kpf_resp = requests.get(kpf_url, params=kpf_params, verify=False)
+    #print(f'WMKO KpfAccess Data: {wmko_kpf_resp}')
+    if not wmko_kpf_resp:
+        #print('NO DATA RESPONSE')
+        #message = ''.join((message, 'NO DATA RESPONSE'))   # uncomment when kpf access becomes available
+        kpf_access = None
+        kpf_pair = f'"KpfAccess": None'
+        #sys.exit()
+    else:
+        kpf_access = wmko_kpf_resp.json()['KpfAccess']
+        kpf_pair = f'"KpfAccess": {kpf_access}'
+
+    #print(f'*** {prog_code} WMKO KpfAccess Data: {kpf_access} ***')
+    #output[prog_code].append(kpf_pair)
+
+    # ----- WMKO PIs -----
     pi_rec    = pi[prog_code].split(",")
     pi_email  = pi_rec[0].strip()
     pi_lname  = pi_rec[1].strip()
@@ -253,8 +297,12 @@ for prog_code in prog_codes:
     new["alias"] = pi_alias
     new["keckid"] = pi_keckid
     new["access"] = "required" if pi_alias not in ipac_users else "granted"
+    new["koa_access"] = koa_access
+    new["kpf_access"] = kpf_access
     output[prog_code].append(new)
 
+
+    # ----- WMKO Admins -----
     # need additional admin info from IPAC database
     # API request for list of current admins
     # admin_url = config["API"]["IPAC_URL"]
@@ -283,6 +331,7 @@ for prog_code in prog_codes:
         new["access"] = "required" if adm not in ipac_users else "granted"
         output[prog_code].append(new)
     
+    # ----- WMKO SAs -----
     for sa in sa_list:
         #print(sa)
         sa_fname  = sa_obj[sa]['firstname']
@@ -302,120 +351,115 @@ for prog_code in prog_codes:
         new["access"] = "required" if sa not in ipac_users else "granted"
         output[prog_code].append(new)
 
-    for obs_lname in observers[prog_code]:
-        obs_params = {}
-        obs_params["last"]  = obs_lname
-        wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
-        wmko_obs_resp = wmko_obs_resp.json()
-
-        for item in wmko_obs_resp:
-            #print(f'item is {item}')
-            obs_fname = item["FirstName"]
-            obs_lname = item["LastName"]
-            obs_email = item["Email"]
-            obs_id    = item["Id"]
-            obs_user  = item["username"]
-
-            new = {}
-            new["semid"] = prog_code
-            new["usertype"] = "observer"
-            new["firstname"] = obs_fname
-            new["lastname"] = obs_lname
-            new["email"] = obs_email
-            #new["alias"] = ""
-            new["alias"] = obs_user
-            #new["username"] = obs_user
-            new["keckid"] = obs_id
-            new["access"] = "required" if obs_user not in ipac_users else "granted"
-            output[prog_code].append(new)
+    # ----- WMKO Observers -----
+    if koa_access:
+        for obs_lname in observers[prog_code]:
+            obs_params = {}
+            obs_params["last"]  = obs_lname
+            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
+            wmko_obs_resp = wmko_obs_resp.json()
+    
+            for item in wmko_obs_resp:
+                #print(f'item is {item}')
+                obs_fname = item["FirstName"]
+                obs_lname = item["LastName"]
+                obs_email = item["Email"]
+                obs_id    = item["Id"]
+                obs_user  = item["username"]
+    
+                new = {}
+                new["semid"] = prog_code
+                new["usertype"] = "observer"
+                new["firstname"] = obs_fname
+                new["lastname"] = obs_lname
+                new["email"] = obs_email
+                #new["alias"] = ""
+                new["alias"] = obs_user
+                #new["username"] = obs_user
+                new["keckid"] = obs_id
+                new["access"] = "required" if obs_user not in ipac_users else "granted"
+                #new["koa_access"] = koa_access
+                #new["kpf_access"] = kpf_access
+                output[prog_code].append(new)
 
 
     # ----- WMKO COI -----
+        coi_params          = {}
+        coi_params["ktn"]   = prog_code
+        
+        wmko_coi_resp = requests.get(coi_url, params=coi_params, verify=False)
+        if not wmko_coi_resp:
+            print('NO DATA RESPONSE')
+            message = ''.join((message, 'NO DATA RESPONSE'))
+            sys.exit()
+        else:
+            wmko_coi_data = wmko_coi_resp.json()['data']['COIs']
+        
+        #print(f'WMKO COI DATA: {wmko_coi_data}')
+        
+        for coi_item in wmko_coi_data:
+            coi_semid  = coi_item['KTN']
+            coi_type   = coi_item['Type']
+            coi_fname  = coi_item['FirstName']
+            coi_lname  = coi_item['LastName']
+            coi_email  = coi_item['Email']
+            coi_alias  = coi_item['Email'].split('@')[0]
+            coi_keckid = coi_item['ObsId']
+        
+            new = {}
+            new["semid"] = prog_code
+            #new["semid"] = coi_semid
+            #new["usertype"] = "coi"   # if both observer and coi, do not replicate
+            new["usertype"] = coi_type.lower()
+            new["firstname"] = coi_fname
+            new["lastname"] = coi_lname
+            new["email"] = coi_email
+            new["alias"] = coi_alias
+            new["keckid"] = coi_keckid
+            new["access"] = "required" if pi_alias not in ipac_users else "granted"
+            #new["access"] = "required"   # combine with observers
+            #new["koa_access"] = koa_access
+            #new["kpf_access"] = kpf_access
+            output[prog_code].append(new)
 
-    coi_params          = {}
-    coi_params["ktn"]   = prog_code
-    
-    wmko_coi_resp = requests.get(coi_url, params=coi_params, verify=False)
-    if not wmko_coi_resp:
-        print('NO DATA RESPONSE')
-        message = ''.join((message, 'NO DATA RESPONSE'))
-        sys.exit()
-    else:
-        wmko_coi_data = wmko_coi_resp.json()['data']['COIs']
-    
-    print(f'WMKO COI DATA: {wmko_coi_data}')
-    
-    for coi_item in wmko_coi_data:
-        coi_semid  = coi_item['KTN']
-        coi_type   = coi_item['Type']
-        coi_fname  = coi_item['FirstName']
-        coi_lname  = coi_item['LastName']
-        coi_email  = coi_item['Email']
-        coi_alias  = coi_item['Email'].split('@')[0]
-        coi_keckid = coi_item['ObsId']
-    
-        new = {}
-        new["semid"] = prog_code
-        #new["semid"] = coi_semid
-        #new["usertype"] = "coi"   # if both observer and coi, do not replicate
-        new["usertype"] = coi_type.lower()
-        new["firstname"] = coi_fname
-        new["lastname"] = coi_lname
-        new["email"] = coi_email
-        new["alias"] = coi_alias
-        new["keckid"] = coi_keckid
-        new["access"] = "required" if pi_alias not in ipac_users else "granted"
-        #new["access"] = "required"   # combine with observers
-        output[prog_code].append(new)
-
-
-
-
-    # ----- WMKO KoaAccess -----
-
-#    coi_params          = {}
-#    coi_params["ktn"]   = prog_code
+#    # ----- WMKO KoaAccess -----
+#
+#        koa_params          = {}
+#        koa_params["ktn"]   = prog_code
+#        
+#        wmko_koa_resp = requests.get(koa_url, params=koa_params, verify=False)
+#        if not wmko_koa_resp:
+#            print('NO DATA RESPONSE')
+#            message = ''.join((message, 'NO DATA RESPONSE'))
+#            koa_access = None
+#            sys.exit()
+#        else:
+#            koa_access = wmko_koa_resp.json()['KoaAccess']
+#            koa_pair = f'"KoaAccess": {koa_access}'
+#
+#        print(f'*** {prog_code} WMKO KoaAccess Data: {koa_access} ***')
+#        output[prog_code].append(koa_pair)
 #    
-#    wmko_koa_resp = requests.get(coi_url, params=coi_params, verify=False)
-#    if not wmko_koa_resp:
-#        print('NO DATA RESPONSE')
-#        message = ''.join((message, 'NO DATA RESPONSE'))
-#        sys.exit()
-#    else:
-#        wmko_koa_data = wmko_koa_resp.json()['data']['COIs']
-#    
-#    print(f'WMKO KoaAccess Data: {wmko_koa_data}')
-#    
-#    for koa_item in wmko_koa_data:
-#        coi_semid  = prop_item['KTN']
-#        coi_type   = prop_item['Type']
-#        coi_fname  = prop_item['FirstName']
-#        coi_lname  = prop_item['LastName']
-#        coi_email  = prop_item['Email']
-#        coi_alias  = prop_item['Email'].split('@')[0]
-#        coi_keckid = prop_item['ObsId']
-#    
-#        new = {}
-#        new["semid"] = prog_code
-#        #new["semid"] = coi_semid
-#        #new["usertype"] = "coi"   # if both observer and coi, do not replicate
-#        new["usertype"] = coi_type.lower()
-#        new["firstname"] = coi_fname
-#        new["lastname"] = coi_lname
-#        new["email"] = coi_email
-#        new["alias"] = coi_alias
-#        new["keckid"] = coi_keckid
-#        new["access"] = "required" if pi_alias not in ipac_users else "granted"
-#        #new["access"] = "required"   # combine with observers
-#        output[prog_code].append(new)
-
-
-
-
-
-
-
-
+#
+#    # ----- WMKO KpfAccess [TBD 2024B Aug 2024] -----
+#
+#        kpf_params          = {}
+#        kpf_params["ktn"]   = prog_code
+#        
+#        wmko_kpf_resp = requests.get(kpf_url, params=kpf_params, verify=False)
+#        #print(f'WMKO KpfAccess Data: {wmko_kpf_resp}')
+#        if not wmko_kpf_resp:
+#            #print('NO DATA RESPONSE')
+#            #message = ''.join((message, 'NO DATA RESPONSE'))   # uncomment when kpf access becomes available
+#            kpf_access = None
+#            kpf_pair = f'"KpfAccess": None'
+#            #sys.exit()
+#        else:
+#            kpf_access = wmko_kpf_resp.json()['KpfAccess']
+#            kpf_pair = f'"KpfAccess": {kpf_access}'
+#
+#        print(f'*** {prog_code} WMKO KpfAccess Data: {kpf_access} ***')
+#        output[prog_code].append(kpf_pair)
 
 
 

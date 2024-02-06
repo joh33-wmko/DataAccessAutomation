@@ -145,7 +145,6 @@ ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_USERS_WITH_ACCESS
 # Call APIs on the startDate and numdays
 # API request for list of current SAs - will only change for new and departing SAs
 
-#emp_url             = config['API']['EMP_URL']
 emp_params          = {}
 emp_params["role"]  = "SA"
 
@@ -161,7 +160,6 @@ else:
     #print(sa_item)
 
 # API request for list of current Observers
-#obs_url = config['API']['OBS_URL']
 sa_obj = {}
 sa_list = []
 for sa_item in wmko_emp_data:
@@ -192,7 +190,6 @@ for sa_item in wmko_emp_data:
 
 # ----- create PI and OBS objects from schedule API -----
 
-#sched_url = config['API']['SCHED_URL']
 sched_params = {}
 sched_params["date"]    = startDate
 sched_params["numdays"] = numdays
@@ -246,9 +243,8 @@ message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 
 
 admins = ['koaadmin', 'hireseng']
+cpsadmin = ['cpsadmin']
 output = {}
-
-#ipac_url = config['API']['IPAC_URL']
 
 for prog_code in prog_codes:
 #    print(prog_code)
@@ -334,7 +330,7 @@ for prog_code in prog_codes:
     # ----- WMKO Admins -----
     # need additional admin info from IPAC database
     # API request for list of current admins
-    # admin_url = config["API"]["IPAC_URL"]
+
     for adm in admins:
         #print(f'adm is {adm}')
 #        admin_params = {}

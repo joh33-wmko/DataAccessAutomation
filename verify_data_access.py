@@ -59,6 +59,35 @@ EMAIL_LIST = config["REPORT"]["WMKO_EMAIL"]
 #EMAIL_LIST = config["REPORT"]["IPAC_EMAIL"]
 #EMAIL_LIST = ','.join(config["REPORT"]["WMKO_EMAIL"], config["REPORT"]["IPAC_EMAIL"])
 
+def generate_output(type, in_obj, out_obj, ktn,  ):
+
+    if type == 'pi':
+        rec    = in_obj[prog_code].split(",")
+        pi_email  = pi_rec[0].strip()
+        pi_lname  = pi_rec[1].strip()
+        pi_fname  = pi_rec[2].strip()
+        pi_userid  = pi_rec[3].strip()
+        pi_keckid = pi_rec[4].strip()
+    
+        new = {}
+        new["semid"] = prog_code
+        new["usertype"] = "pi"
+        new["firstname"] = pi_fname
+        new["lastname"] = pi_lname
+        new["email"] = pi_email
+        #new["userid"] = ""
+        new["userid"] = pi_userid
+        new["keckid"] = pi_keckid
+        new["access"] = "required" if pi_userid not in ipac_users else "granted"
+        new["koa_access"] = koa_access
+        new["kpf_access"] = kpf_access
+        return output[prog_code].append(new)
+
+
+
+
+
+
 def send_email(message, error):
     errorMsg = 'ERROR: ' if error == 1 else ''
     #email = config["REPORT"]["EMAIL_LIST"]
@@ -137,17 +166,17 @@ sa_obj = {}
 sa_list = []
 for sa_item in wmko_emp_data:
     sa_info = {}
-    sa_alias = sa_item["Alias"]
+    sa_userid = sa_item["Alias"]
     sa_firstname = sa_item["FirstName"]
     sa_lastname = sa_item["LastName"]
     sa_email = f'{sa_item["Alias"]}@keck.hawaii.edu'
     sa_keckid = sa_item["EId"]
-    #sa.add(sa_alias)
-    sa_list.append(sa_alias)
+    #sa.add(sa_userid)
+    sa_list.append(sa_userid)
     sa_info["firstname"] = sa_firstname
     sa_info["lastname"] = sa_lastname
     sa_info["email"] = sa_email
-    sa_info["alias"] = sa_alias
+    sa_info["userid"] = sa_userid
     sa_info["keckid"] = 0 #sa_keckid
 
     obs_params = {}
@@ -159,7 +188,7 @@ for sa_item in wmko_emp_data:
     for item in wmko_obs_resp:
         sa_info["keckid"] = item["Id"]
 
-    sa_obj[sa_alias] = sa_info
+    sa_obj[sa_userid] = sa_info
 
 # ----- create PI and OBS objects from schedule API -----
 
@@ -187,11 +216,11 @@ for entry in wmko_sched_data:
 
     # generate PIs per prog_code
     if entry['PiEmail']:
-        pi_alias = (entry['PiEmail'].split('@'))[0]
+        pi_userid = (entry['PiEmail'].split('@'))[0]
     else:
-        pi_alias = entry['PiEmail']
+        pi_userid = entry['PiEmail']
 
-    pi[prog_code] = f"{entry['PiEmail']}, {entry['PiLastName']}, {entry['PiFirstName']}, {pi_alias}, {entry['PiId']}"
+    pi[prog_code] = f"{entry['PiEmail']}, {entry['PiLastName']}, {entry['PiFirstName']}, {pi_userid}, {entry['PiId']}"
 
     # generate Observers per prog_code
     if prog_code not in observers.keys():
@@ -284,7 +313,7 @@ for prog_code in prog_codes:
     pi_email  = pi_rec[0].strip()
     pi_lname  = pi_rec[1].strip()
     pi_fname  = pi_rec[2].strip()
-    pi_alias  = pi_rec[3].strip()
+    pi_userid  = pi_rec[3].strip()
     pi_keckid = pi_rec[4].strip()
 
     new = {}
@@ -293,10 +322,10 @@ for prog_code in prog_codes:
     new["firstname"] = pi_fname
     new["lastname"] = pi_lname
     new["email"] = pi_email
-    #new["alias"] = ""
-    new["alias"] = pi_alias
+    #new["userid"] = ""
+    new["userid"] = pi_userid
     new["keckid"] = pi_keckid
-    new["access"] = "required" if pi_alias not in ipac_users else "granted"
+    new["access"] = "required" if pi_userid not in ipac_users else "granted"
     new["koa_access"] = koa_access
     new["kpf_access"] = kpf_access
     output[prog_code].append(new)
@@ -326,7 +355,7 @@ for prog_code in prog_codes:
         new["firstname"] = ""
         new["lastname"] = ""
         new["email"] = ""
-        new["alias"] = adm
+        new["userid"] = adm
         new["keckid"] = 0
         new["access"] = "required" if adm not in ipac_users else "granted"
         output[prog_code].append(new)
@@ -337,7 +366,7 @@ for prog_code in prog_codes:
         sa_fname  = sa_obj[sa]['firstname']
         sa_lname  = sa_obj[sa]['lastname']
         sa_addr   = sa_obj[sa]['email']
-        sa_alias  = sa_obj[sa]['alias']
+        sa_userid  = sa_obj[sa]['userid']
         sa_keckid = sa_obj[sa]['keckid']
 
         new = {}
@@ -346,7 +375,7 @@ for prog_code in prog_codes:
         new["firstname"] = sa_fname
         new["lastname"] = sa_lname
         new["email"] = sa_addr
-        new["alias"] = sa_alias
+        new["userid"] = sa_userid
         new["keckid"] = sa_keckid
         new["access"] = "required" if sa not in ipac_users else "granted"
         output[prog_code].append(new)
@@ -373,8 +402,8 @@ for prog_code in prog_codes:
                 new["firstname"] = obs_fname
                 new["lastname"] = obs_lname
                 new["email"] = obs_email
-                #new["alias"] = ""
-                new["alias"] = obs_user
+                #new["userid"] = ""
+                new["userid"] = obs_user
                 #new["username"] = obs_user
                 new["keckid"] = obs_id
                 new["access"] = "required" if obs_user not in ipac_users else "granted"
@@ -403,7 +432,7 @@ for prog_code in prog_codes:
             coi_fname  = coi_item['FirstName']
             coi_lname  = coi_item['LastName']
             coi_email  = coi_item['Email']
-            coi_alias  = coi_item['Email'].split('@')[0]
+            coi_userid  = coi_item['Email'].split('@')[0]
             coi_keckid = coi_item['ObsId']
         
             new = {}
@@ -414,9 +443,9 @@ for prog_code in prog_codes:
             new["firstname"] = coi_fname
             new["lastname"] = coi_lname
             new["email"] = coi_email
-            new["alias"] = coi_alias
+            new["userid"] = coi_userid
             new["keckid"] = coi_keckid
-            new["access"] = "required" if pi_alias not in ipac_users else "granted"
+            new["access"] = "required" if pi_userid not in ipac_users else "granted"
             #new["access"] = "required"   # combine with observers
             #new["koa_access"] = koa_access
             #new["kpf_access"] = kpf_access

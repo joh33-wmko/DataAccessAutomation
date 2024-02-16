@@ -1,11 +1,7 @@
 #! /usr/local/anaconda/bin/python
 
-# KOA Data Access Automation (DAA)
-# - Check tonight
-# -      $ python3 ./verify_data_access.py
-# -      Default date is today and default num days is 1
-# - Check schedule changes (programs, observers, etc.)
-# -      $ python3 ./verify_data_access.py --numdays 7
+# ... something got cut off, please restore it ...
+
 # -      Verifies if new observers
 # - Check next month
 # -      $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29
@@ -15,9 +11,15 @@
 # - Run with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
 
 # ToDos:
-# - KoaAccess
-# - KpfAccess
+# - X Remove PI from Observers list
+# - X Remove COI from Observers list
+# - X KoaAccess - report observers and COIs 
+# - X            unique name, use ObsId = keckid, instead of alias or last name
+# - X KpfAccess - report cpsadmin user
+# - remove koa_access and kpf_access from PI output
 # - make defs for "new" assignments
+# - make defs for access granted/required 
+# - restore logger witout requirement for kpython3
 
 # daa imports
 import argparse
@@ -34,6 +36,8 @@ import urllib3
 urllib3.disable_warnings()
 
 import pdb   # pdb.set_trace() sets breakpoint
+             # import pdb; pdb.set_trace() inline
+             # breakpoint()   # can activate/deactivate all
 
 # prepare config file
 from os.path import dirname
@@ -44,6 +48,16 @@ configFile = "config.live.ini"
 filename = f'{dirname}/{configFile}'
 assert os.path.isfile(filename), f"ERROR: {filename} file missing"
 with open(filename) as f: config = yaml.safe_load(f)
+
+# ----- APIs ----- move to def calls
+# admin_url = config["API"]["ADMIN_URL"]   # for user info
+emp_url   = config['API']['EMP_URL']     # for SAs
+sched_url = config['API']['SCHED_URL']   # for SEMIDs
+obs_url   = config['API']['OBS_URL']     # for Observers' info
+coi_url  = config['API']['COI_URL']      # for for coversheet COIs
+koa_url  = config['API']['KOA_URL']      # for for coversheet KoaAccess
+kpf_url  = config['API']['KPF_URL']      # for for coversheet KpfAccess
+ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_USERS_WITH_ACCESS
 
 date_format = '%Y-%m-%d'
 
@@ -59,34 +73,31 @@ EMAIL_LIST = config["REPORT"]["WMKO_EMAIL"]
 #EMAIL_LIST = config["REPORT"]["IPAC_EMAIL"]
 #EMAIL_LIST = ','.join(config["REPORT"]["WMKO_EMAIL"], config["REPORT"]["IPAC_EMAIL"])
 
-def generate_output(type, in_obj, out_obj, ktn,  ):
+# pi, only, so far... extend use for other objects - nicety
+def generate_output(type, in_obj, ktn, ipac_users_obj):
+
+    out_obj = {}
 
     if type == 'pi':
-        rec    = in_obj[prog_code].split(",")
-        pi_email  = pi_rec[0].strip()
-        pi_lname  = pi_rec[1].strip()
-        pi_fname  = pi_rec[2].strip()
-        pi_userid  = pi_rec[3].strip()
-        pi_keckid = pi_rec[4].strip()
+        rec    = in_obj[ktn]
+        userid = rec['userid']
+        fname  = rec['firstname']
+        lname  = rec['lastname']
+        email  = rec['email']
+        keckid = rec['keckid']
     
         new = {}
-        new["semid"] = prog_code
-        new["usertype"] = "pi"
-        new["firstname"] = pi_fname
-        new["lastname"] = pi_lname
-        new["email"] = pi_email
-        #new["userid"] = ""
-        new["userid"] = pi_userid
-        new["keckid"] = pi_keckid
-        new["access"] = "required" if pi_userid not in ipac_users else "granted"
-        new["koa_access"] = koa_access
-        new["kpf_access"] = kpf_access
-        return output[prog_code].append(new)
-
-
-
-
-
+        new["semid"] = ktn
+        new["usertype"] = type
+        new["firstname"] = fname
+        new["lastname"] = lname
+        new["email"] = email
+        new["userid"] = userid
+        new["keckid"] = keckid
+        new["access"] = "granted" if keckid in ipac_keckids[prog_code] or userid in ipac_userids[prog_code] or email in ipac_emails[prog_code] else "required"
+        new["koa_access"] = koa_access   # remove after testing
+        new["kpf_access"] = kpf_access   # remove after testing
+        return new
 
 def send_email(message, error):
     errorMsg = 'ERROR: ' if error == 1 else ''
@@ -107,7 +118,7 @@ def valid_date(date_str: str) -> dt:
 
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Verify Data Access")
-parser.add_argument("--date", type=valid_date, default=dt.today(), help="Run Date Format is yyyy-mm-dd", required=False)
+parser.add_argument("--date", type=valid_date, default=dt.today(), help="HST Run Date Format is yyyy-mm-dd", required=False)   # do we need UTC?
 parser.add_argument("--numdays", type=int, default=1, help="Integer from 1 to 180", required=False)
 parser.add_argument("--email", default=False, action="store_true", help="Enter emails separated by commmas", required=False)
 args = parser.parse_args()
@@ -130,19 +141,8 @@ endDate   = dt.strftime(endDate, '%Y-%m-%d')
 date_range = f'{startDate} to {endDate} ({numdays} day(s)) '
 message = ''.join((message, date_range, "\n"))
 
-# ----- APIs ----- move to def calls
 
-emp_url   = config['API']['EMP_URL']     # for SAs
-sched_url = config['API']['SCHED_URL']   # for SEMIDs
-obs_url   = config['API']['OBS_URL']     # for Observers' info
-#admin_url = config["API"]["ADMIN_URL"]   # for user info
-coi_url  = config['API']['COI_URL']      # for for coversheet COIs
-koa_url  = config['API']['KOA_URL']      # for for coversheet KoaAccess
-kpf_url  = config['API']['KPF_URL']      # for for coversheet KpfAccess
-ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_USERS_WITH_ACCESS
-
-# ----- create data objects: WMKO SAs -----
-# Call APIs on the startDate and numdays
+# ----- create WMKO SA objects from employee API -----
 # API request for list of current SAs - will only change for new and departing SAs
 
 emp_params          = {}
@@ -156,39 +156,37 @@ if not wmko_emp_resp:
 else:
     wmko_emp_data = wmko_emp_resp.json()
 
-#for sa_item in wmko_emp_data:
-    #print(sa_item)
-
-# API request for list of current Observers
 sa_obj = {}
 sa_list = []
 for sa_item in wmko_emp_data:
-    sa_info = {}
+
     sa_userid = sa_item["Alias"]
     sa_firstname = sa_item["FirstName"]
     sa_lastname = sa_item["LastName"]
-    sa_email = f'{sa_item["Alias"]}@keck.hawaii.edu'
-    sa_keckid = sa_item["EId"]
-    #sa.add(sa_userid)
+    sa_addr = f'{sa_item["Alias"]}@keck.hawaii.edu'
     sa_list.append(sa_userid)
+
+    sa_info = {}
     sa_info["firstname"] = sa_firstname
     sa_info["lastname"] = sa_lastname
-    sa_info["email"] = sa_email
+    sa_info["email"] = sa_addr
     sa_info["userid"] = sa_userid
     sa_info["keckid"] = 0 #sa_keckid
 
+    # retrieve and populate SA's keckid
     obs_params = {}
     obs_params["last"]   = sa_lastname
     obs_params["first"]  = sa_firstname
     wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
-    wmko_obs_resp = wmko_obs_resp.json()
+    wmko_obs_data = wmko_obs_resp.json()
 
-    for item in wmko_obs_resp:
-        sa_info["keckid"] = item["Id"]
+    for obs in wmko_obs_data:
+        sa_info["keckid"] = obs["Id"]
 
     sa_obj[sa_userid] = sa_info
 
-# ----- create PI and OBS objects from schedule API -----
+# ----- create PI and Observer objects from schedule API -----
+# Call APIs on the startDate and numdays
 
 sched_params = {}
 sched_params["date"]    = startDate
@@ -203,47 +201,77 @@ else:
     wmko_sched_data = wmko_sched_resp.json()
 
 prog_codes = set()
-pi = {}
-observers = {}
+pi_list = {}
+obs_list = {}
 
 for entry in wmko_sched_data:
     #print(entry)
+
+    # create prog_codes list
     prog_code = f"{entry['Semester']}_{entry['ProjCode']}"
     prog_codes.add(prog_code)
 
-    # generate PIs per prog_code
-    if entry['PiEmail']:
-        pi_userid = (entry['PiEmail'].split('@'))[0]
+    # generate PI object per prog_code
+    if entry['PiFirstName'] and entry['PiLastName']:
+        pi_userid = (entry['PiFirstName'][0] + entry['PiLastName']).lower()   # get from getObserverInfo
     else:
-        pi_userid = entry['PiEmail']
+        pi_userid = ''
 
-    pi[prog_code] = f"{entry['PiEmail']}, {entry['PiLastName']}, {entry['PiFirstName']}, {pi_userid}, {entry['PiId']}"
+    pi_list[prog_code] = {}
+    pi_list[prog_code]['userid'] = pi_userid
+    pi_list[prog_code]['firstname'] = entry['PiFirstName']
+    pi_list[prog_code]['lastname'] = entry['PiLastName']
+    pi_list[prog_code]['email'] = entry['PiEmail']
+    pi_list[prog_code]['keckid'] = entry['PiId']
 
     # generate Observers per prog_code
-    if prog_code not in observers.keys():
-        observers[prog_code] = []           # add new prog_code list
+    if prog_code not in obs_list.keys() or not entry["Observers"]:
+        obs_list[prog_code] = {}           # add new prog_code list
+        
     if 'Observers' in entry.keys():
-        if entry["Observers"] != None:
-            #observers[prog_code] += entry["Observers"].split(",")
-            observers[prog_code] = entry["Observers"].split(",")   # fixes replicated observers
-            observers[prog_code] = set(observers[prog_code])
-        else:
-            observers[prog_code] = None 
+        if entry["Observers"] and entry["ObsId"]:
+            #obs_list[prog_code] += entry["Observers"].split(",")   # duplicates obs_list
+
+            obs_list[prog_code]['lastnames'] = []
+            obs_list[prog_code]['obs_ids']   = []
+
+            obs_list[prog_code]['lastnames'] = entry["Observers"].split(",")
+            obs_list[prog_code]["lastnames"] = set(obs_list[prog_code]["lastnames"])
+
+            obs_list[prog_code]['obs_ids'] = entry["ObsId"].split(",")
+            obs_list[prog_code]['obs_ids'] = [int(val) for val in obs_list[prog_code]['obs_ids']]
+            obs_list[prog_code]["obs_ids"] = set(obs_list[prog_code]["obs_ids"])
+
+        #else:
+            #obs_list[prog_code] = None 
+            #obs_list[prog_code] = {} 
+    else:
+        print(f'MISSING Observers key')
+        obs_list[prog_code] = None
+
+print(f'\nGlobal OBS_LIST[PROG_CODE] set: {obs_list}')
 
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
+print(f'\nPROG_CODES: {prog_codes}')
+
+
+# ***** GENERATE OUTPUT *****
+
 output = {}
 
-# ----- generate report -----
-
-#print(f'{len(prog_codes)} SEMIDs found')
 message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
 ##daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
 
 
-admins = ['koaadmin', 'hireseng']
+admins = ['hireseng', 'koaadmin']
 cpsadmin = ['cpsadmin']
+all_admins = cpsadmin + admins
+#ipac_users = {}
+ipac_keckids = {}
+ipac_userids = {}
+ipac_emails = {}
 output = {}
 
 for prog_code in prog_codes:
@@ -259,14 +287,17 @@ for prog_code in prog_codes:
     ipac_resp = requests.get(ipac_url, params=ipac_params, auth=(config['ipac']['user'],config['ipac']['pwd']))
     ipac_resp = ipac_resp.json()
 
-    ipac_users = set()
+    ipac_keckids[prog_code] = []
+    ipac_userids[prog_code] = []
+    ipac_emails[prog_code] = []
     for ipac_obj in ipac_resp["response"]["detail"]:
-        #print(ipac_obj["userid"], ipac_obj["email"], ipac_obj["keckid"], ipac_obj["first"], ipac_obj["last"])
-        #ipac_users.add(ipac_obj["userid"])  # additional check in case email address is changed
-        ipac_users.add(ipac_obj["email"].split("@")[0])
+        ipac_keckids[prog_code].append(ipac_obj["keckid"])
+        ipac_userids[prog_code].append(ipac_obj["userid"])
+        ipac_emails[prog_code].append(ipac_obj["email"])
+
 
     # ----- WMKO KoaAccess -----
-
+    koa_access          = 0
     koa_params          = {}
     koa_params["ktn"]   = prog_code
     
@@ -278,19 +309,16 @@ for prog_code in prog_codes:
         sys.exit()
     else:
         koa_access = wmko_koa_resp.json()['KoaAccess']
+        #koa_access = 1                                    # remove after testing
         koa_pair = f'"KoaAccess": {koa_access}'
 
-    #print(f'*** {prog_code} WMKO KoaAccess Data: {koa_access} ***')
-    #output[prog_code].append(koa_pair)
 
-
-    # ----- WMKO KpfAccess [TBD 2024B Aug 2024] -----
-
+    # ----- WMKO KpfAccess [2024B Aug 2024] -----
+    kpf_access          = 0
     kpf_params          = {}
     kpf_params["ktn"]   = prog_code
     
     wmko_kpf_resp = requests.get(kpf_url, params=kpf_params, verify=False)
-    #print(f'WMKO KpfAccess Data: {wmko_kpf_resp}')
     if not wmko_kpf_resp:
         #print('NO DATA RESPONSE')
         #message = ''.join((message, 'NO DATA RESPONSE'))   # uncomment when kpf access becomes available
@@ -299,116 +327,28 @@ for prog_code in prog_codes:
         #sys.exit()
     else:
         kpf_access = wmko_kpf_resp.json()['KpfAccess']
+        kpf_access = 1                                    # remove after testing
         kpf_pair = f'"KpfAccess": {kpf_access}'
-
-    #print(f'*** {prog_code} WMKO KpfAccess Data: {kpf_access} ***')
-    #output[prog_code].append(kpf_pair)
-
-    # ----- WMKO PIs -----
-    pi_rec    = pi[prog_code].split(",")
-    pi_email  = pi_rec[0].strip()
-    pi_lname  = pi_rec[1].strip()
-    pi_fname  = pi_rec[2].strip()
-    pi_userid  = pi_rec[3].strip()
-    pi_keckid = pi_rec[4].strip()
-
-    new = {}
-    new["semid"] = prog_code
-    new["usertype"] = "pi"
-    new["firstname"] = pi_fname
-    new["lastname"] = pi_lname
-    new["email"] = pi_email
-    #new["userid"] = ""
-    new["userid"] = pi_userid
-    new["keckid"] = pi_keckid
-    new["access"] = "required" if pi_userid not in ipac_users else "granted"
-    new["koa_access"] = koa_access
-    new["kpf_access"] = kpf_access
-    output[prog_code].append(new)
+        if kpf_access:
+            admins = all_admins
 
 
-    # ----- WMKO Admins -----
-    # need additional admin info from IPAC database
-    # API request for list of current admins
+    # ----- 1. WMKO PIs Output -----
+    output[prog_code].append(generate_output('pi', pi_list, prog_code, ipac_userids))
 
-    for adm in admins:
-        #print(f'adm is {adm}')
-#        admin_params = {}
-#        admin_params["last"]  = adm
-#        wmko_adm_resp = requests.get(admin_url, params=admin_params, verify=False)
-#        wmko_adm_resp = wmko_adm_resp.json()
 
-#        if wmko_adm_resp:
-#            admin_lname = wmko_adm_resp["LastName"]
-#            admin_fname = wmko_adm_resp["FirstName"]
-#            admin_email = wmko_adm_resp["Email"]
-#            admin_id    = wmko_adm_resp["Id"]
-#            admin_user  = wmko_adm_resp["username"]
+    # ----- 2. WMKO COIs and Observers Outputs -----
+    # - Observers listed as PI or COI will not appear as Observers, but only as PIs or COIs, instead
+    # - all observers and COIs require access if KoaAccess = 1
 
-        new = {}
-        new["semid"] = prog_code
-        new["usertype"] = "admin"
-        new["firstname"] = ""
-        new["lastname"] = ""
-        new["email"] = ""
-        new["userid"] = adm
-        new["keckid"] = 0
-        new["access"] = "required" if adm not in ipac_users else "granted"
-        output[prog_code].append(new)
-    
-    # ----- WMKO SAs -----
-    for sa in sa_list:
-        #print(sa)
-        sa_fname  = sa_obj[sa]['firstname']
-        sa_lname  = sa_obj[sa]['lastname']
-        sa_addr   = sa_obj[sa]['email']
-        sa_userid  = sa_obj[sa]['userid']
-        sa_keckid = sa_obj[sa]['keckid']
-
-        new = {}
-        new["semid"] = prog_code
-        new["usertype"] = "sa"
-        new["firstname"] = sa_fname
-        new["lastname"] = sa_lname
-        new["email"] = sa_addr
-        new["userid"] = sa_userid
-        new["keckid"] = sa_keckid
-        new["access"] = "required" if sa not in ipac_users else "granted"
-        output[prog_code].append(new)
-
-    # ----- WMKO Observers -----
     if koa_access:
-        for obs_lname in observers[prog_code]:
-            obs_params = {}
-            obs_params["last"]  = obs_lname
-            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
-            wmko_obs_resp = wmko_obs_resp.json()
-    
-            for item in wmko_obs_resp:
-                #print(f'item is {item}')
-                obs_fname = item["FirstName"]
-                obs_lname = item["LastName"]
-                obs_email = item["Email"]
-                obs_id    = item["Id"]
-                obs_user  = item["username"]
-    
-                new = {}
-                new["semid"] = prog_code
-                new["usertype"] = "observer"
-                new["firstname"] = obs_fname
-                new["lastname"] = obs_lname
-                new["email"] = obs_email
-                #new["userid"] = ""
-                new["userid"] = obs_user
-                #new["username"] = obs_user
-                new["keckid"] = obs_id
-                new["access"] = "required" if obs_user not in ipac_users else "granted"
-                #new["koa_access"] = koa_access
-                #new["kpf_access"] = kpf_access
-                output[prog_code].append(new)
 
+        # ----- 2a. WMKO COIs Output -----
+        wmko_coi_data = {}
+        coi_firstnames = []
+        coi_lastnames = []
+        coi_keckids = []
 
-    # ----- WMKO COI -----
         coi_params          = {}
         coi_params["ktn"]   = prog_code
         
@@ -420,8 +360,6 @@ for prog_code in prog_codes:
         else:
             wmko_coi_data = wmko_coi_resp.json()['data']['COIs']
         
-        #print(f'WMKO COI DATA: {wmko_coi_data}')
-        
         for coi_item in wmko_coi_data:
             coi_semid  = coi_item['KTN']
             coi_type   = coi_item['Type']
@@ -430,63 +368,99 @@ for prog_code in prog_codes:
             coi_email  = coi_item['Email']
             coi_userid  = coi_item['Email'].split('@')[0]
             coi_keckid = coi_item['ObsId']
+
+            # for obs comparisons
+            coi_firstnames.append(coi_fname)
+            coi_lastnames.append(coi_lname)
+            coi_keckids.append(coi_keckid)
         
             new = {}
             new["semid"] = prog_code
             #new["semid"] = coi_semid
-            #new["usertype"] = "coi"   # if both observer and coi, do not replicate
             new["usertype"] = coi_type.lower()
             new["firstname"] = coi_fname
             new["lastname"] = coi_lname
             new["email"] = coi_email
             new["userid"] = coi_userid
             new["keckid"] = coi_keckid
-            new["access"] = "required" if pi_userid not in ipac_users else "granted"
-            #new["access"] = "required"   # combine with observers
-            #new["koa_access"] = koa_access
-            #new["kpf_access"] = kpf_access
+            new["access"] = "granted" if coi_keckid in ipac_keckids[prog_code] or coi_userid in ipac_userids[prog_code] or coi_email in ipac_emails[prog_code] else "required"
+            new["koa_access"] = koa_access
             output[prog_code].append(new)
 
-#    # ----- WMKO KoaAccess -----
-#
-#        koa_params          = {}
-#        koa_params["ktn"]   = prog_code
-#        
-#        wmko_koa_resp = requests.get(koa_url, params=koa_params, verify=False)
-#        if not wmko_koa_resp:
-#            print('NO DATA RESPONSE')
-#            message = ''.join((message, 'NO DATA RESPONSE'))
-#            koa_access = None
-#            sys.exit()
-#        else:
-#            koa_access = wmko_koa_resp.json()['KoaAccess']
-#            koa_pair = f'"KoaAccess": {koa_access}'
-#
-#        print(f'*** {prog_code} WMKO KoaAccess Data: {koa_access} ***')
-#        output[prog_code].append(koa_pair)
-#    
-#
-#    # ----- WMKO KpfAccess [TBD 2024B Aug 2024] -----
-#
-#        kpf_params          = {}
-#        kpf_params["ktn"]   = prog_code
-#        
-#        wmko_kpf_resp = requests.get(kpf_url, params=kpf_params, verify=False)
-#        #print(f'WMKO KpfAccess Data: {wmko_kpf_resp}')
-#        if not wmko_kpf_resp:
-#            #print('NO DATA RESPONSE')
-#            #message = ''.join((message, 'NO DATA RESPONSE'))   # uncomment when kpf access becomes available
-#            kpf_access = None
-#            kpf_pair = f'"KpfAccess": None'
-#            #sys.exit()
-#        else:
-#            kpf_access = wmko_kpf_resp.json()['KpfAccess']
-#            kpf_pair = f'"KpfAccess": {kpf_access}'
-#
-#        print(f'*** {prog_code} WMKO KpfAccess Data: {kpf_access} ***')
-#        output[prog_code].append(kpf_pair)
+        # ----- 2b. WMKO Observers Output -----
+        #for obs_lname in obs_list[prog_code]:
+        for obs_id in obs_list[prog_code]['obs_ids']:
+            obs_params = {}
+            obs_params["obsid"]  = obs_id
+            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
+            wmko_obs_data = wmko_obs_resp.json()
+    
+            for item in wmko_obs_data:
+                #print(f'item is {item}')
 
+                obs_fname = item["FirstName"]
+                obs_lname = item["LastName"]
+                obs_email = item["Email"]
+                obs_id    = item["Id"]
+                obs_userid  = item["username"]
 
+                # removes replicated PI observers
+                pi_lname = pi_list[prog_code]["lastname"]
+                pi_fname = pi_list[prog_code]["firstname"]
+                pi_keckid = pi_list[prog_code]["keckid"]
+
+                if pi_lname == obs_lname and pi_fname == obs_fname and pi_keckid == obs_id:
+                    continue 
+
+                # removes replicated COI observers
+                if obs_lname in coi_lastnames and obs_fname in coi_firstnames and obs_id in coi_keckids:
+                    continue
+
+                new = {}
+                new["semid"] = prog_code
+                new["usertype"] = "observer"
+                new["firstname"] = obs_fname
+                new["lastname"] = obs_lname
+                new["email"] = obs_email
+                new["userid"] = obs_userid
+                new["keckid"] = obs_id
+                new["access"] = "granted" if obs_id in ipac_keckids[prog_code] or obs_userid in ipac_userids[prog_code] or obs_email in ipac_emails[prog_code] else "required"
+                new["koa_access"] = koa_access
+                output[prog_code].append(new)
+
+    # ----- 3. WMKO SAs Output -----
+    for sa in sa_list:
+        #print(sa)
+        sa_fname  = sa_obj[sa]['firstname']
+        sa_lname  = sa_obj[sa]['lastname']
+        sa_email   = sa_obj[sa]['email']
+        sa_userid  = sa_obj[sa]['userid']
+        sa_keckid = sa_obj[sa]['keckid']
+
+        new = {}
+        new["semid"] = prog_code
+        new["usertype"] = "sa"
+        new["firstname"] = sa_fname
+        new["lastname"] = sa_lname
+        new["email"] = sa_email
+        new["userid"] = sa_userid
+        new["keckid"] = sa_keckid
+        new["access"] = "granted" if sa_keckid in ipac_keckids[prog_code] or sa_userid in ipac_userids[prog_code] or sa_email in ipac_emails[prog_code] else "required"
+        output[prog_code].append(new)
+
+    # ----- 4. WMKO Admins Output -----
+    for adm in admins:
+        new = {}
+        new["semid"] = prog_code
+        new["usertype"] = "admin"
+        new["firstname"] = ""
+        new["lastname"] = ""
+        new["email"] = ""
+        new["userid"] = adm
+        new["keckid"] = 0
+        new["access"] = "granted" if adm in ipac_userids[prog_code] else "required"
+        new["kpf_access"] = kpf_access
+        output[prog_code].append(new)
 
 json_output = json.dumps(output, indent=2)
 #print(json_output)
@@ -507,3 +481,4 @@ sendReport = True
 if (sendReport and email):
     send_email(final_output, error)
 else: print(final_output, error)
+

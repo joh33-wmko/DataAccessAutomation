@@ -1,27 +1,27 @@
 #! /usr/local/anaconda/bin/python
 
-# ... something got cut off, please restore it ...
-
-# -      Verifies if new observers
-# - Check next month
-# -      $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29
-# -      Verifies PI, Observers, cps, etc.
-# - Send report via email(s)
-# -      $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29 --email jmader@keck.hawaii.edu
-# - Run with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
+# WMKO KOA Data Access Automation
+# - Send report via email(s) with --email option
+# - Defaults (--date is today and num of days is 1)
+# -     $ python3 ./verify_data_access.py [--email [user@keck.hawaii.edu]]
+# - Check a specific date (num of days = 1)
+# -     $ python3 ./verify_data_access.py --date 2024-02-01
+# - Check a specific date and date range
+# -     $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 14
+# - Check next month (if today is Jan 2024, next month is leap year month)
+# -     $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29
+# - TBD Invoke with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
+# -      $ kpython3 ./verify_data_access.py --date 2024-02-01 --numdays 29 --email user@keck.hawaii.edu
 
 # ToDos:
-# - X Remove PI from Observers list
-# - X Remove COI from Observers list
-# - X KoaAccess - report observers and COIs 
-# - X            unique name, use ObsId = keckid, instead of alias or last name
-# - X KpfAccess - report cpsadmin user
-# - remove koa_access and kpf_access from PI output
-# - make defs for "new" assignments
-# - make defs for access granted/required 
-# - restore logger witout requirement for kpython3
+# - accommodate Meca's script - input to IPAC may need to be a file
+# - refactor and clean up
+#   - make defs for "new" assignments
+# - restore logger without requirement for kpython3
+# - additional:
+#   - wmko keckid vs ipac koaid string mismatch report (???)
 
-# daa imports
+# daa modules
 import argparse
 import json
 import os
@@ -35,11 +35,7 @@ from datetime import datetime as dt, timedelta
 import urllib3
 urllib3.disable_warnings()
 
-import pdb   # pdb.set_trace() sets breakpoint
-             # import pdb; pdb.set_trace() inline
-             # breakpoint()   # can activate/deactivate all
-
-# prepare config file
+# config file modules
 from os.path import dirname
 import yaml
 
@@ -49,7 +45,11 @@ filename = f'{dirname}/{configFile}'
 assert os.path.isfile(filename), f"ERROR: {filename} file missing"
 with open(filename) as f: config = yaml.safe_load(f)
 
-# ----- APIs ----- move to def calls
+import pdb   # pdb.set_trace() sets breakpoint
+             # import pdb; pdb.set_trace() inline
+             # breakpoint()   # can activate/deactivate all
+
+# ===== APIs =====
 # admin_url = config["API"]["ADMIN_URL"]   # for user info
 emp_url   = config['API']['EMP_URL']     # for SAs
 sched_url = config['API']['SCHED_URL']   # for SEMIDs
@@ -60,21 +60,46 @@ kpf_url  = config['API']['KPF_URL']      # for for coversheet KpfAccess
 ipac_url  = config['API']['IPAC_URL']    # for IPAC GET_USERS_WITH_ACCESS
 
 date_format = '%Y-%m-%d'
-
 email = ''
 error = ''
 message = ''
-#message = ''.join((message, id.zfill(4), '  '))
-
 message = ''.join((message, '\nKOA DATA ACCESS AUTOMATION (DAA) REPORT\n'))
 
-#EMAIL_LIST = config["REPORT"]["ADMIN_EMAIL"]
 EMAIL_LIST = config["REPORT"]["WMKO_EMAIL"]
+#EMAIL_LIST = config["REPORT"]["ADMIN_EMAIL"]
 #EMAIL_LIST = config["REPORT"]["IPAC_EMAIL"]
 #EMAIL_LIST = ','.join(config["REPORT"]["WMKO_EMAIL"], config["REPORT"]["IPAC_EMAIL"])
 
-# pi, only, so far... extend use for other objects - nicety
-def generate_output(type, in_obj, ktn, ipac_users_obj):
+def send_email(message, error):
+    errorMsg = 'ERROR: ' if error == 1 else ''
+    #email = config["REPORT"]["EMAIL_LIST"]
+    msg = MIMEText(message)
+    msg['Subject'] = f"{errorMsg} KOA Data Access Verification ({socket.gethostname()})"
+    msg['To'] = EMAIL_LIST
+    msg['From'] = config["REPORT"]["ADMIN_EMAIL"]
+    s = smtplib.SMTP('localhost')
+    s.send_message(msg)
+    s.quit()
+
+
+def valid_date(date_str: str) -> dt:
+    try:
+        return dt.strptime(date_str, date_format)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a valid date: {date_str!r}")
+
+
+def get_access(prog_code_n, keckid_n, userid_n, email_n, ipac_keckids_n, ipac_userids_n, ipac_emails_n):
+    access = ""
+    access = "granted" if keckid_n in ipac_keckids_n[prog_code_n] or \
+                          userid_n in ipac_userids_n[prog_code_n] or \
+                          email_n in ipac_emails_n[prog_code_n] \
+                       else "required"
+    return access
+
+
+# only PI, so far... extend use for other objects - nicety
+def generate_output(type, in_obj, ktn, ipac_keckids_lst, ipac_userids_lst, ipac_emails_lst):
 
     out_obj = {}
 
@@ -94,27 +119,10 @@ def generate_output(type, in_obj, ktn, ipac_users_obj):
         new["email"] = email
         new["userid"] = userid
         new["keckid"] = keckid
-        new["access"] = "granted" if keckid in ipac_keckids[prog_code] or userid in ipac_userids[prog_code] or email in ipac_emails[prog_code] else "required"
+        new["access"] = get_access(ktn, keckid, userid, email, ipac_keckids_lst, ipac_userids_lst, ipac_emails_lst)
         new["koa_access"] = koa_access   # remove after testing
         new["kpf_access"] = kpf_access   # remove after testing
         return new
-
-def send_email(message, error):
-    errorMsg = 'ERROR: ' if error == 1 else ''
-    #email = config["REPORT"]["EMAIL_LIST"]
-    msg = MIMEText(message)
-    msg['Subject'] = f"{errorMsg} KOA Data Access Verification ({socket.gethostname()})"
-    msg['To'] = EMAIL_LIST
-    msg['From'] = config["REPORT"]["ADMIN_EMAIL"]
-    s = smtplib.SMTP('localhost')
-    s.send_message(msg)
-    s.quit()
-
-def valid_date(date_str: str) -> dt:
-    try:
-        return dt.strptime(date_str, date_format)
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"not a valid date: {date_str!r}")
 
 # parse command line arguments
 parser = argparse.ArgumentParser(description="Verify Data Access")
@@ -143,8 +151,6 @@ message = ''.join((message, date_range, "\n"))
 
 
 # ----- create WMKO SA objects from employee API -----
-# API request for list of current SAs - will only change for new and departing SAs
-
 emp_params          = {}
 emp_params["role"]  = "SA"
 
@@ -186,8 +192,6 @@ for sa_item in wmko_emp_data:
     sa_obj[sa_userid] = sa_info
 
 # ----- create PI and Observer objects from schedule API -----
-# Call APIs on the startDate and numdays
-
 sched_params = {}
 sched_params["date"]    = startDate
 sched_params["numdays"] = numdays
@@ -249,12 +253,12 @@ for entry in wmko_sched_data:
         print(f'MISSING Observers key')
         obs_list[prog_code] = None
 
-print(f'\nGlobal OBS_LIST[PROG_CODE] set: {obs_list}')
+#print(f'\nGlobal OBS_LIST[PROG_CODE] set: {obs_list}')
 
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
-print(f'\nPROG_CODES: {prog_codes}')
+#print(f'\nPROG_CODES: {prog_codes}')
 
 
 # ***** GENERATE OUTPUT *****
@@ -262,8 +266,7 @@ print(f'\nPROG_CODES: {prog_codes}')
 output = {}
 
 message = ''.join((message, f'{len(prog_codes)} SEMIDs found \n'))
-##daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
-
+#daalogger.info('KOA DAA: Processing {len(prog_codes)} SEMIDs found ')   # toggle for logger
 
 admins = ['hireseng', 'koaadmin']
 cpsadmin = ['cpsadmin']
@@ -277,8 +280,7 @@ output = {}
 for prog_code in prog_codes:
 #    print(prog_code)
     output[prog_code] = []
-    ##daalogger.info('KOA DAA: Processing ', ..., {semid}, {progid})   # split semid and progid and report to logger; toggle for logger
-    #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report to logger
+    #daalogger.info('KOA DAA: Processing {prog_code}')   # split semid and progid and report for logger
 
     # ----- IPAC User Access List -----
     ipac_params = {}
@@ -327,14 +329,14 @@ for prog_code in prog_codes:
         #sys.exit()
     else:
         kpf_access = wmko_kpf_resp.json()['KpfAccess']
-        kpf_access = 1                                    # remove after testing
+        #kpf_access = 1                                    # remove after testing
         kpf_pair = f'"KpfAccess": {kpf_access}'
         if kpf_access:
             admins = all_admins
 
 
     # ----- 1. WMKO PIs Output -----
-    output[prog_code].append(generate_output('pi', pi_list, prog_code, ipac_userids))
+    output[prog_code].append(generate_output('pi', pi_list, prog_code, ipac_keckids, ipac_userids, ipac_emails))
 
 
     # ----- 2. WMKO COIs and Observers Outputs -----
@@ -383,7 +385,7 @@ for prog_code in prog_codes:
             new["email"] = coi_email
             new["userid"] = coi_userid
             new["keckid"] = coi_keckid
-            new["access"] = "granted" if coi_keckid in ipac_keckids[prog_code] or coi_userid in ipac_userids[prog_code] or coi_email in ipac_emails[prog_code] else "required"
+            new["access"] = get_access(coi_semid, coi_keckid, coi_userid, coi_email, ipac_keckids, ipac_userids, ipac_emails)
             new["koa_access"] = koa_access
             output[prog_code].append(new)
 
@@ -424,7 +426,7 @@ for prog_code in prog_codes:
                 new["email"] = obs_email
                 new["userid"] = obs_userid
                 new["keckid"] = obs_id
-                new["access"] = "granted" if obs_id in ipac_keckids[prog_code] or obs_userid in ipac_userids[prog_code] or obs_email in ipac_emails[prog_code] else "required"
+                new["access"] = get_access(prog_code, obs_id, obs_userid, obs_email, ipac_keckids, ipac_userids, ipac_emails)
                 new["koa_access"] = koa_access
                 output[prog_code].append(new)
 
@@ -445,20 +447,28 @@ for prog_code in prog_codes:
         new["email"] = sa_email
         new["userid"] = sa_userid
         new["keckid"] = sa_keckid
-        new["access"] = "granted" if sa_keckid in ipac_keckids[prog_code] or sa_userid in ipac_userids[prog_code] or sa_email in ipac_emails[prog_code] else "required"
+        new["access"] = get_access(prog_code, sa_keckid, sa_userid, sa_email, ipac_keckids, ipac_userids, ipac_emails)
         output[prog_code].append(new)
 
     # ----- 4. WMKO Admins Output -----
     for adm in admins:
+        adm_semid = prog_code
+        adm_usertype = "admin"
+        adm_firstname = ""
+        adm_lastname = ""
+        adm_email = ""
+        adm_userid = adm
+        adm_keckid = 0
+
         new = {}
-        new["semid"] = prog_code
-        new["usertype"] = "admin"
-        new["firstname"] = ""
-        new["lastname"] = ""
-        new["email"] = ""
-        new["userid"] = adm
-        new["keckid"] = 0
-        new["access"] = "granted" if adm in ipac_userids[prog_code] else "required"
+        new["semid"] = adm_semid
+        new["usertype"] = adm_usertype
+        new["firstname"] = adm_firstname
+        new["lastname"] = adm_lastname
+        new["email"] = adm_email
+        new["userid"] = adm_userid
+        new["keckid"] = adm_keckid
+        new["access"] = get_access(prog_code, adm_keckid, adm_userid, adm_email, ipac_keckids, ipac_userids, ipac_emails)
         new["kpf_access"] = kpf_access
         output[prog_code].append(new)
 
@@ -466,11 +476,7 @@ json_output = json.dumps(output, indent=2)
 #print(json_output)
 
 # ----- send report via email -----
-# send an email python object to the KOA helpdesk users (and respective info) which require access
-# output report is a python object. to make json friendly, remove final commas from lists
-
 message = ''.join((message, "\n"))
-
 final_output = ''.join((message, json_output))
 
 #sendReport = False

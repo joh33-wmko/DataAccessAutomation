@@ -11,7 +11,9 @@
 # - Check next month (if today is Jan 2024, next month is leap year month)
 # -     $ python3 ./verify_data_access.py --date 2024-02-01 --numdays 29
 # - TBD Invoke with kpython3 for logger functionality (uncomment "# toggle for logger" lines)
-# -      $ kpython3 ./verify_data_access.py --date 2024-02-01 --numdays 29 --email user@keck.hawaii.edu
+# -     $ kpython3 ./verify_data_access.py --date 2024-02-01 --numdays 29 --email user@keck.hawaii.edu
+# - Invoke with option to activate Koa_Access or Kpf_Access or both for testing
+# -     $ python3 .//verify_data_access.py ... --force koa|kpf|both (default os none)
 
 # ToDos:
 # - accommodate Meca's script - input to IPAC may need to be a file
@@ -100,9 +102,7 @@ def get_access(prog_code_n, keckid_n, userid_n, email_n, ipac_keckids_n, ipac_us
 
 # only PI, so far... extend use for other objects - nicety
 def generate_output(type, in_obj, ktn, ipac_keckids_lst, ipac_userids_lst, ipac_emails_lst):
-
     out_obj = {}
-
     if type == 'pi':
         rec    = in_obj[ktn]
         userid = rec['userid']
@@ -129,11 +129,13 @@ parser = argparse.ArgumentParser(description="Verify Data Access")
 parser.add_argument("--date", type=valid_date, default=dt.today(), help="HST Run Date Format is yyyy-mm-dd", required=False)   # do we need UTC?
 parser.add_argument("--numdays", type=int, default=1, help="Integer from 1 to 180", required=False)
 parser.add_argument("--email", default=False, action="store_true", help="Enter emails separated by commmas", required=False)
+parser.add_argument("--force", type=str, default='none', help="koa = koa_access (show COIs and Observers), kpf = kpf_access (cpsadmin), both = koa_access and kpf_access", required=False)
 args = parser.parse_args()
 
 startDate = args.date
-numdays = args.numdays
 email = args.email
+force = args.force
+numdays = args.numdays
 
 if numdays <= 0:
     numdays = 1
@@ -229,36 +231,29 @@ for entry in wmko_sched_data:
     pi_list[prog_code]['keckid'] = entry['PiId']
 
     # generate Observers per prog_code
-    if prog_code not in obs_list.keys() or not entry["Observers"]:
+    if prog_code not in obs_list.keys():
         obs_list[prog_code] = {}           # add new prog_code list
+        obs_list[prog_code]['lastnames'] = []
+        obs_list[prog_code]['obs_ids']   = []
         
-    if 'Observers' in entry.keys():
-        if entry["Observers"] and entry["ObsId"]:
-            #obs_list[prog_code] += entry["Observers"].split(",")   # duplicates obs_list
+    if ('Observers' in entry.keys() and 'ObsId' in entry.keys()) and \
+       (entry["Observers"] != 'none' and entry["ObsId"] != ''):
 
-            obs_list[prog_code]['lastnames'] = []
-            obs_list[prog_code]['obs_ids']   = []
+        obs_list[prog_code]['lastnames'] += entry["Observers"].split(",")
+        obs_list[prog_code]["lastnames"] = list(dict.fromkeys(obs_list[prog_code]["lastnames"]))
 
-            obs_list[prog_code]['lastnames'] = entry["Observers"].split(",")
-            obs_list[prog_code]["lastnames"] = set(obs_list[prog_code]["lastnames"])
+        obs_list[prog_code]['obs_ids'] += entry["ObsId"].split(",")
+        obs_list[prog_code]['obs_ids'] = [int(val) for val in obs_list[prog_code]['obs_ids']]
+        obs_list[prog_code]["obs_ids"] = list(dict.fromkeys(obs_list[prog_code]["obs_ids"]))
 
-            obs_list[prog_code]['obs_ids'] = entry["ObsId"].split(",")
-            obs_list[prog_code]['obs_ids'] = [int(val) for val in obs_list[prog_code]['obs_ids']]
-            obs_list[prog_code]["obs_ids"] = set(obs_list[prog_code]["obs_ids"])
-
-        #else:
-            #obs_list[prog_code] = None 
-            #obs_list[prog_code] = {} 
-    else:
-        print(f'MISSING Observers key')
-        obs_list[prog_code] = None
-
-#print(f'\nGlobal OBS_LIST[PROG_CODE] set: {obs_list}')
+#   else:
+#       print(f'{prog_code} MISSING keys or values for Observers or ObsId')
 
 prog_codes = list(prog_codes)
 prog_codes.sort()
 
 #print(f'\nPROG_CODES: {prog_codes}')
+#print(f'\nGlobal OBS_LIST[PROG_CODE]:\n {obs_list}')
 
 
 # ***** GENERATE OUTPUT *****
@@ -311,7 +306,9 @@ for prog_code in prog_codes:
         sys.exit()
     else:
         koa_access = wmko_koa_resp.json()['KoaAccess']
-        #koa_access = 1                                    # remove after testing
+        # force state for obs and coi
+        if force in ('koa', 'both'):
+            koa_access = 1
         koa_pair = f'"KoaAccess": {koa_access}'
 
 
@@ -329,7 +326,9 @@ for prog_code in prog_codes:
         #sys.exit()
     else:
         kpf_access = wmko_kpf_resp.json()['KpfAccess']
-        #kpf_access = 1                                    # remove after testing
+        # force state for cpsadmin
+        if force in ('kpf', 'both'):
+            kpf_access = 1
         kpf_pair = f'"KpfAccess": {kpf_access}'
         if kpf_access:
             admins = all_admins
@@ -345,10 +344,17 @@ for prog_code in prog_codes:
 
     if koa_access:
 
+        # for removal of  replicated PI observers
+        pi_lname = pi_list[prog_code]["lastname"]
+        pi_fname = pi_list[prog_code]["firstname"]
+        pi_keckid = pi_list[prog_code]["keckid"]
+        pi_userid = pi_list[prog_code]["userid"]
+    
         # ----- 2a. WMKO COIs Output -----
         wmko_coi_data = {}
         coi_firstnames = []
         coi_lastnames = []
+        coi_userids = []
         coi_keckids = []
 
         coi_params          = {}
@@ -374,8 +380,13 @@ for prog_code in prog_codes:
             # for obs comparisons
             coi_firstnames.append(coi_fname)
             coi_lastnames.append(coi_lname)
+            coi_userids.append(coi_userid)
             coi_keckids.append(coi_keckid)
         
+            # removes coi if pi is also coi - tbd
+            if pi_keckid == coi_keckid or (pi_lname == coi_lname and pi_fname == coi_fname) or pi_userid == coi_userid:
+                continue 
+    
             new = {}
             new["semid"] = prog_code
             #new["semid"] = coi_semid
@@ -390,45 +401,43 @@ for prog_code in prog_codes:
             output[prog_code].append(new)
 
         # ----- 2b. WMKO Observers Output -----
-        #for obs_lname in obs_list[prog_code]:
-        for obs_id in obs_list[prog_code]['obs_ids']:
-            obs_params = {}
-            obs_params["obsid"]  = obs_id
-            wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
-            wmko_obs_data = wmko_obs_resp.json()
+        if 'obs_ids' in obs_list[prog_code].keys() and obs_list[prog_code]["obs_ids"] != "":
+            for obs_id in obs_list[prog_code]['obs_ids']:
+                obs_params = {}
+                obs_params["obsid"]  = obs_id
+                wmko_obs_resp = requests.get(obs_url, params=obs_params, verify=False)
+                wmko_obs_data = wmko_obs_resp.json()
+        
+                for item in wmko_obs_data:
+                    #print(f'item is {item}')
     
-            for item in wmko_obs_data:
-                #print(f'item is {item}')
-
-                obs_fname = item["FirstName"]
-                obs_lname = item["LastName"]
-                obs_email = item["Email"]
-                obs_id    = item["Id"]
-                obs_userid  = item["username"]
-
-                # removes replicated PI observers
-                pi_lname = pi_list[prog_code]["lastname"]
-                pi_fname = pi_list[prog_code]["firstname"]
-                pi_keckid = pi_list[prog_code]["keckid"]
-
-                if pi_lname == obs_lname and pi_fname == obs_fname and pi_keckid == obs_id:
-                    continue 
-
-                # removes replicated COI observers
-                if obs_lname in coi_lastnames and obs_fname in coi_firstnames and obs_id in coi_keckids:
-                    continue
-
-                new = {}
-                new["semid"] = prog_code
-                new["usertype"] = "observer"
-                new["firstname"] = obs_fname
-                new["lastname"] = obs_lname
-                new["email"] = obs_email
-                new["userid"] = obs_userid
-                new["keckid"] = obs_id
-                new["access"] = get_access(prog_code, obs_id, obs_userid, obs_email, ipac_keckids, ipac_userids, ipac_emails)
-                new["koa_access"] = koa_access
-                output[prog_code].append(new)
+                    obs_fname = item["FirstName"]
+                    obs_lname = item["LastName"]
+                    obs_email = item["Email"]
+                    obs_id    = item["Id"]
+                    obs_userid  = item["username"]
+    
+                    # removes replicated PI observers
+                    #if pi_lname == obs_lname and pi_fname == obs_fname and pi_keckid == obs_id:
+                    if pi_keckid == obs_id or (pi_lname == obs_lname and pi_fname == obs_fname) or pi_userid == obs_userid:
+                        continue 
+    
+                    # removes replicated COI observers
+                    #if obs_lname in coi_lastnames and obs_fname in coi_firstnames and obs_id in coi_keckids:
+                    if obs_id in coi_keckids or (obs_lname in coi_lastnames and obs_fname in coi_firstnames) or obs_userid in coi_userids:
+                        continue
+    
+                    new = {}
+                    new["semid"] = prog_code
+                    new["usertype"] = "observer"
+                    new["firstname"] = obs_fname
+                    new["lastname"] = obs_lname
+                    new["email"] = obs_email
+                    new["userid"] = obs_userid
+                    new["keckid"] = obs_id
+                    new["access"] = get_access(prog_code, obs_id, obs_userid, obs_email, ipac_keckids, ipac_userids, ipac_emails)
+                    new["koa_access"] = koa_access
+                    output[prog_code].append(new)
 
     # ----- 3. WMKO SAs Output -----
     for sa in sa_list:

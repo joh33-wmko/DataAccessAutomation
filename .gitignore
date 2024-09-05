@@ -1,6 +1,12 @@
 #.gitignore
 *.swp
+*.bak
+*.curr
+*.json
+*.txt
 config.live.ini
+test*
 __pycache__/
 data/
 orig/
+logs/
